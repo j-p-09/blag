@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+<meta charset="UTF-8">
+<title>WII Blagajna</title>
+<style>
+body { font-family: Arial, sans-serif; display: flex; background: #f0f0f0; }
+.racun { width: 30%; background: #bbb; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; border-radius:10px; }
+.racun h2, .racun h3 { text-align: center; margin: 5px 0; }
+.artikli { flex-grow: 1; background: #ddd; margin: 10px 0; padding: 5px; overflow-y: auto; border-radius:10px; }
+.artikel { padding: 5px; border-bottom: 1px solid #aaa; cursor: pointer; border-radius:5px; }
+.artikel.izbran { background: #999; }
+.artikel.paket { background: yellow; }
+.skupaj { font-size: 1.5em; font-weight: bold; text-align: center; }
+.gumbi { display: grid; grid-template-columns: repeat(3, 120px); grid-gap: 10px; padding: 20px; }
+button { padding: 15px; border: none; border-radius: 10px; font-weight: bold; font-size: 14px; color: white; cursor: pointer; }
+.violet { background: #a020f0; }
+.pink { background: #ff00aa; }
+.blue { background: #0080ff; }
+.red { background: #ff0044; }
+.big { grid-column: span 2; }
+.modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #eee; padding: 20px; border-radius: 10px; z-index: 100; display: none; width: 300px; box-shadow: 0 0 10px #555; }
+.modal-header { font-weight: bold; margin-bottom: 10px; text-align:center; }
+.modal button { margin: 5px; width: 80px; }
+.modal-artikli { max-height:200px; overflow-y:auto; margin-bottom:10px; border:1px solid #aaa; padding:5px; background:#ddd; border-radius:5px; }
+</style>
+</head>
+<body>
+
+<div class="racun">
+  <h2>RAČUN</h2>
+  <div class="artikli" id="artikli"></div>
+  <div class="skupaj">SKUPAJ: <span id="skupaj">0.00</span> WII</div>
+</div>
+
+<div class="gumbi">
+  <!-- Artikli -->
+  <button class="violet" onclick="dodaj('ZVEZDICA',12)">ZVEZDICA</button>
+  <button class="violet" onclick="dodaj('IZBRIS KAZNI',47)">IZ.KAZ.</button>
+  <button class="pink" onclick="dodaj('ŽELE BURGER',17.40)">ZEL. BUR.</button>
+  <button class="pink" onclick="dodaj('MODRA KISLICA',4.70)">M. KISLI.</button>
+  <button class="pink" onclick="dodaj('RDEČA KISLICA',9.90)">R. KISLI.</button>
+  <button class="blue" onclick="dodaj('PAPIRNATA VREČKA',0.35)">P. VREC.</button>
+  <button class="blue" onclick="dodaj('VREČKA ZA NAKUP',3.50)">VR. NAK.</button>
+  <button class="blue" onclick="dodaj('NALEPKA',1.99)">NALEPKA</button>
+  <button class="red" onclick="dodaj('KUVERTA',4)">KUVERTA</button>
+  <button class="red" onclick="dodaj('POŠTNINA',1.30)">POŠT.</button>
+  <button class="red" onclick="dodaj('ZNAMKA',0.70)">ZNAM.</button>
+  <button class="red" onclick="dodaj('PAKET NALEPKA',1)">PAK. NAL.</button>
+
+  <!-- Funkcijski gumbi -->
+  <button class="blue" onclick="toggleCene()">P.O.F</button>
+  <button class="blue" onclick="promo()">PROMO</button>
+  <button class="blue" onclick="zgodovina()">ZGOD.</button>
+  <button class="blue" onclick="banka()">BANK.</button>
+  <button class="blue" onclick="kupon()">%</button>
+  <button class="blue" onclick="kolicina()">KOL.</button>
+  <button class="blue big" onclick="paket()">NAREDI PAKET</button>
+  <button class="red big" onclick="placaj()">KONČAJ IN PLAČAJ</button>
+  <button class="red big" onclick="prilag()">KONČAJ IN PRILAG.</button>
+  <button class="blue big" onclick="poklici()">POKL.</button>
+</div>
+
+<!-- Modalni okvirji -->
+<div class="modal" id="placiloModal"></div>
+<div class="modal" id="bankModal"></div>
+<div class="modal" id="kuponModal"></div>
+<div class="modal" id="zgodovinaModal"></div>
+
+<script>
+let skupaj = 0;
+let artikli = [];
+let izbranIndex = null;
+let prikaziCene = false;
+let zgodovinaRacunov = [];
+let banke = { TJ17: {ime:"Tinkara Jelen", stanje:100}, AJ17: {ime:"Anže Jelen", stanje:100} };
+let kuponi = {};
+let paketIzbran = false;
+
+function osveziRacun(){
+  const div = document.getElementById("artikli");
+  div.innerHTML = "";
+  skupaj = 0;
+  artikli.forEach((a,i)=>{
+    if(a.kolicina===0){ artikli.splice(i,1); return; }
+    const el = document.createElement("div");
+    el.className = "artikel" + (i===izbranIndex ? " izbran":"") + (a.paket?" paket":"");
+    let text = a.ime;
+    if(a.promo){ text = "P "+text; a.cenaP = 0; } else a.cenaP = a.cena;
+    if(a.kolicina && a.kolicina>1) text += " x"+a.kolicina;
+    if(prikaziCene) text += " - "+(a.cenaP*(a.kolicina||1)).toFixed(2)+" WII";
+    el.innerText = text;
+    el.onclick = ()=>{ izbranIndex=i; osveziRacun(); };
+    div.appendChild(el);
+    skupaj += (a.cenaP*(a.kolicina||1));
+  });
+  document.getElementById("skupaj").innerText = skupaj.toFixed(2);
+}
+
+function dodaj(ime, cena){
+  artikli.push({ime, cena, kolicina:1});
+  osveziRacun();
+}
+
+function placaj(){
+  const modal = document.getElementById("placiloModal");
+  modal.style.display="block";
+  modal.innerHTML = `<div class="modal-header">PLAČILO</div>
+  <button onclick="placaGotovina()">GOTOVINA</button>
+  <button onclick="placaKartica()">KARTICA</button>
+  <button onclick="modal.style.display='none'">ZAPRI</button>`;
+}
+
+function placaGotovina(){
+  const got = parseFloat(prompt("Vnesi gotovino:"));
+  if(got>=skupaj){ alert("Vračilo: "+(got-skupaj).toFixed(2)); zgodovinaRacunov.push([...artikli]); artikli=[]; osveziRacun(); document.getElementById("placiloModal").style.display="none"; }
+  else alert("Premalo denarja!");
+}
+
+function placaKartica(){
+  const kod = prompt("Vnesi kodo kartice:");
+  if(banke[kod]){
+    const b = banke[kod];
+    const modal = document.getElementById("bankModal");
+    modal.style.display="block";
+    function refresh(){ modal.querySelector("#stanje").innerText=b.stanje.toFixed(2); }
+    modal.innerHTML = `<div class="modal-header">RAČUN: ${b.ime}</div>
+    <div>Stanje: <span id="stanje">${b.stanje.toFixed(2)}</span> WII</div>
+    <button onclick="if(b.stanje>=skupaj){ b.stanje-=skupaj; alert('Plačilo izvedeno'); zgodovinaRacunov.push([...artikli]); artikli=[]; osveziRacun(); refresh(); }else alert('Premalo sredstev');">PLAČAJ</button>
+    <button onclick="b.stanje+=skupaj; refresh(); alert('Naložba izvedena')">NALOŽI</button>
+    <button onclick="modal.style.display='none'">ZAPRI</button>`;
+  } else alert("Neveljavna kartica!");
+}
+
+function promo(){ if(izbranIndex!==null){ artikli[izbranIndex].promo=true; osveziRacun(); } }
+function toggleCene(){ prikaziCene=!prikaziCene; osveziRacun(); }
+
+function kolicina(){
+  if(izbranIndex!==null){
+    const k = parseInt(prompt("Vnesi količino:"));
+    if(!isNaN(k)){ artikli[izbranIndex].kolicina=k; osveziRacun(); }
+  }
+}
+
+function paket(){ paketIzbran=!paketIzbran; artikli.forEach(a=>a.paket=paketIzbran); osveziRacun(); }
+
+function prilag(){ const racNum = Math.floor(Math.random()*1000000); alert("Številka računa: "+racNum); zgodovinaRacunov.push([...artikli]); artikli=[]; osveziRacun(); }
+
+function poklici(){
+  let modal = document.getElementById("zgodovinaModal");
+  modal.style.display="block";
+  let vse = "<div class='modal-header'>SHRANJENI RAČUNI</div><div class='modal-artikli'>";
+  zgodovinaRacunov.forEach((r,i)=>{ vse+=`<div><button onclick="artikli=[...zgodovinaRacunov[${i}]]; osveziRacun(); document.getElementById('zgodovinaModal').style.display='none';">Račun ${i}</button></div>`; });
+  vse+="</div><button onclick=\"document.getElementById('zgodovinaModal').style.display='none'\">ZAPRI</button>";
+  modal.innerHTML=vse;
+}
+
+function banka(){
+  let modal=document.getElementById("bankModal");
+  modal.style.display="block";
+  let vse="<div class='modal-header'>BANKE</div>";
+  for(let k in banke){ vse+=`<div>${banke[k].ime}: ${banke[k].stanje.toFixed(2)} WII</div>`; }
+  vse+="<button onclick=\"document.getElementById('bankModal').style.display='none'\">ZAPRI</button>";
+  modal.innerHTML=vse;
+}
+
+function zgodovina(){
+  poklici();
+}
+
+function kupon(){
+  let modal = document.getElementById("kuponModal");
+  modal.style.display="block";
+  modal.innerHTML=`<div class='modal-header'>KUPON</div>
+  <button onclick="uporabnikKupon()">UPORABNIK</button>
+  <button onclick="svinčnikKupon()">SVINČNIK</button>
+  <button onclick="modal.style.display='none'">ZAPRI</button>`;
+}
+
+function uporabnikKupon(){
+  const zadnje3=prompt("Vnesi zadnje 3 številke kartice:");
+  let ime="";
+  if(zadnje3==="142") ime="Tinkara Jelen";
+  else if(zadnje3==="000") ime="Jaša Petrinjak";
+  else { alert("Neznan zaposleni"); return; }
+  if(!kuponi[zadnje3]) kuponi[zadnje3]=0;
+  if(kuponi[zadnje3]<3){ skupaj*=0.6; kuponi[zadnje3]++; osveziRacun(); alert("Kupon uporabljen"); }
+  else alert("Kupon že uporabljen 3x");
+}
+
+function svinčnikKupon(){
+  const p=parseFloat(prompt("Koliko %?"));
+  if(!isNaN(p)&&p>0&&p<=100){ skupaj*=(1-p/100); osveziRacun(); }
+}
+</script>
+</body>
+</html>
