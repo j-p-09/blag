@@ -31,6 +31,7 @@ body {
 .artikel.promo { color: red; font-weight: bold; }
 .promo-icon { color:red; font-weight:bold; margin-left:5px; }
 .skupaj { font-size: 1.5em; font-weight: bold; text-align: center; }
+.popust { text-align:center; color:red; font-weight:bold; margin-top:5px; }
 .gumbi { display: grid; grid-template-columns: repeat(3, 120px); grid-gap: 10px; padding: 20px; }
 .gumbi-funkcija { grid-column: span 3; display: grid; grid-template-columns: repeat(2, 1fr); grid-gap: 10px; }
 button { padding: 15px; border: none; border-radius: 10px; font-weight: bold; font-size: 14px; color: white; cursor: pointer; }
@@ -70,6 +71,7 @@ body.fullscreen .gumbi { grid-template-columns: repeat(auto-fill, minmax(120px, 
   <h2 id="racunNaslov">RAČUN #1</h2>
   <div class="artikli" id="artikli"></div>
   <div class="skupaj">SKUPAJ: <span id="skupaj">0.00</span> WII</div>
+  <div class="popust" id="popustInfo"></div>
 </div>
 
 <div class="gumbi">
@@ -126,6 +128,7 @@ let paketIzbran = false;
 let stevecRacunov = (zgodovinaRacunov.length>0?zgodovinaRacunov[zgodovinaRacunov.length-1].racun+1:1);
 let popusti = JSON.parse(localStorage.getItem("popusti")||"{}");
 let zaposleni = { "000":"Jaša Petrinjak", "172":"Anže Jelen", "142":"Tinkara Jelen" };
+let trenutniPopust = null; // {koda, ime}
 
 function shrani(){ 
   localStorage.setItem("zgodovinaRacunov",JSON.stringify(zgodovinaRacunov)); 
@@ -142,7 +145,7 @@ function osveziRacun(){
     el.className = "artikel" + (i===izbranIndex ? " izbran":"") + (a.paket?" paket":"") + (a.promo?" promo":"");
     let text = a.ime;
     if(a.kolicina && a.kolicina>1) text += " x"+a.kolicina;
-    let cena = a.promo?0:a.cena;
+    let cena = parseFloat(a.cena);
     if(prikaziCene) text += " - "+(cena*(a.kolicina||1)).toFixed(2)+" WII";
     el.innerHTML = text + (a.promo?'<span class="promo-icon">P</span>':'');
     el.onclick = ()=>{ izbranIndex=i; osveziRacun(); };
@@ -151,6 +154,14 @@ function osveziRacun(){
   });
   document.getElementById("skupaj").innerText = skupaj.toFixed(2);
   document.getElementById("racunNaslov").innerText = "RAČUN #" + stevecRacunov;
+
+  // 🔹 Info o popustu
+  const popustDiv = document.getElementById("popustInfo");
+  if(trenutniPopust){
+    popustDiv.innerText = "40% popust uveljavljen: " + trenutniPopust.ime;
+  } else {
+    popustDiv.innerText = "";
+  }
 }
 
 function dodaj(ime, cena){
@@ -173,7 +184,7 @@ function placaGotovina(){
     alert("Vračilo: "+(got-skupaj).toFixed(2)); 
     zgodovinaRacunov.push({artikli:JSON.parse(JSON.stringify(artikli)), racun:stevecRacunov}); 
     shrani();
-    artikli=[]; stevecRacunov++; osveziRacun(); 
+    artikli=[]; stevecRacunov++; trenutniPopust=null; osveziRacun(); 
     document.getElementById("placiloModal").style.display="none"; 
   }
   else alert("Premalo denarja!");
@@ -188,50 +199,23 @@ function placaKartica(){
     function refresh(){ modal.querySelector("#stanje").innerText=b.stanje.toFixed(2); }
     modal.innerHTML = `<div class="modal-header">RAČUN: ${b.ime}</div>
     <div>Stanje: <span id="stanje">${b.stanje.toFixed(2)}</span> WII</div>
-    <button onclick="if(b.stanje>=skupaj){ b.stanje-=skupaj; alert('Plačilo izvedeno'); zgodovinaRacunov.push({artikli:JSON.parse(JSON.stringify(artikli)), racun:stevecRacunov}); shrani(); artikli=[]; stevecRacunov++; osveziRacun(); refresh(); }else alert('Premalo sredstev');">PLAČAJ</button>
+    <button onclick="if(b.stanje>=skupaj){ b.stanje-=skupaj; alert('Plačilo izvedeno'); 
+      zgodovinaRacunov.push({artikli:JSON.parse(JSON.stringify(artikli)), racun:stevecRacunov}); shrani(); 
+      artikli=[]; stevecRacunov++; trenutniPopust=null; osveziRacun(); refresh(); }else alert('Premalo sredstev');">PLAČAJ</button>
     <button onclick="modal.style.display='none'">ZAPRI</button>`;
   } else alert("Neveljavna kartica!");
 }
 
 function promo(){ if(izbranIndex!==null){ artikli[izbranIndex].promo=true; osveziRacun(); } }
 function toggleCene(){ prikaziCene=!prikaziCene; osveziRacun(); }
-
-function kolicina(){
-  if(izbranIndex!==null){
-    const k = parseInt(prompt("Vnesi količino:"));
-    if(!isNaN(k)){ artikli[izbranIndex].kolicina=k; osveziRacun(); }
-  }
-}
-
+function kolicina(){ if(izbranIndex!==null){ const k = parseInt(prompt("Vnesi količino:")); if(!isNaN(k)){ artikli[izbranIndex].kolicina=k; osveziRacun(); }}}
 function paket(){ paketIzbran=!paketIzbran; artikli.forEach(a=>a.paket=paketIzbran); osveziRacun(); }
-
-function prilag(){ 
-  alert("Shranjeno kot "+stevecRacunov); 
-  zgodovinaRacunov.push({artikli:JSON.parse(JSON.stringify(artikli)), racun:stevecRacunov}); 
-  shrani();
-  artikli=[]; stevecRacunov++; osveziRacun(); 
-}
-
-function poklici(){
-  const racNum = parseInt(prompt("Vnesi kodo naročila:"));
-  const najden = zgodovinaRacunov.find(r=>r.racun===racNum);
-  if(najden){ artikli=JSON.parse(JSON.stringify(najden.artikli)); osveziRacun(); }
-  else alert("Naročilo ne obstaja!");
-}
-
-function zgodovina(){ 
-  const modal = document.getElementById("zgodovinaModal"); 
-  modal.style.display="block"; 
-  modal.innerHTML="<div class='modal-header'>ZGODOVINA</div>";
-  zgodovinaRacunov.forEach(r=>{ 
-    modal.innerHTML += "<div>Račun #"+r.racun+" - "+r.artikli.map(a=>a.ime+" x"+(a.kolicina||1)).join(", ")+"</div>"; 
-  });
-  modal.innerHTML += "<button onclick=\"document.getElementById('zgodovinaModal').style.display='none'\">ZAPRI</button>"; 
-}
-
+function prilag(){ alert("Shranjeno kot "+stevecRacunov); zgodovinaRacunov.push({artikli:JSON.parse(JSON.stringify(artikli)), racun:stevecRacunov}); shrani(); artikli=[]; stevecRacunov++; trenutniPopust=null; osveziRacun(); }
+function poklici(){ const racNum = parseInt(prompt("Vnesi kodo naročila:")); const najden = zgodovinaRacunov.find(r=>r.racun===racNum); if(najden){ artikli=JSON.parse(JSON.stringify(najden.artikli)); osveziRacun(); } else alert("Naročilo ne obstaja!"); }
+function zgodovina(){ const modal = document.getElementById("zgodovinaModal"); modal.style.display="block"; modal.innerHTML="<div class='modal-header'>ZGODOVINA</div>"; zgodovinaRacunov.forEach(r=>{ modal.innerHTML += "<div>Račun #"+r.racun+" - "+r.artikli.map(a=>a.ime+" x"+(a.kolicina||1)).join(", ")+"</div>"; }); modal.innerHTML += "<button onclick=\"document.getElementById('zgodovinaModal').style.display='none'\">ZAPRI</button>"; }
 function banka(){ alert("Banka: prikaz stanja kartic - funkcija pripravljena"); }
 
-/* 🔹 KUPO N - 40% popust */
+// 🔹 KUPO N - 40% popust
 function kupon(){
   const koda = prompt("Vnesi zadnje 3 številke kartice:");
   const danes = new Date().toISOString().split("T")[0];
@@ -240,6 +224,7 @@ function kupon(){
     if(popusti[koda].st<3){
       popusti[koda].st++;
       artikli.forEach(a=>a.cena = (a.cena*0.6).toFixed(2));
+      trenutniPopust = {koda: koda, ime: zaposleni[koda]};
       alert("40% popust za "+zaposleni[koda]+" uveljavljen! ("+popusti[koda].st+"/3)");
       osveziRacun(); shrani();
     } else {
@@ -250,7 +235,7 @@ function kupon(){
   }
 }
 
-/* 🔹 Fullscreen toggle */
+// 🔹 Fullscreen toggle
 function toggleFullscreen(){ document.body.classList.toggle("fullscreen"); }
 
 osveziRacun();
