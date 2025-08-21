@@ -4,8 +4,24 @@
 <meta charset="UTF-8">
 <title>WII Blagajna</title>
 <style>
-body { font-family: Arial, sans-serif; display: flex; background: #f0f0f0; margin:0; height:100vh; }
-.racun { width: 25%; background: #bbb; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; border-radius:10px; height:100%; }
+body { 
+  font-family: Arial, sans-serif; 
+  display: flex; 
+  background: #f0f0f0; 
+  margin:0; 
+  height:100vh; 
+}
+.racun { 
+  width: 30%; 
+  height: 70%;               /* višina zmanjšana */
+  margin: auto 10px;          /* centrirano po višini */
+  background: #bbb; 
+  padding: 10px; 
+  display: flex; 
+  flex-direction: column; 
+  justify-content: flex-start; 
+  border-radius:10px; 
+}
 .racun h2, .racun h3 { text-align: center; margin: 5px 0; }
 .artikli { flex-grow: 1; background: #ddd; margin: 10px 0; padding: 5px; overflow-y: auto; border-radius:10px; }
 .artikel { padding: 5px; border-bottom: 1px solid #aaa; cursor: pointer; border-radius:5px; display:flex; justify-content:space-between; align-items:center; }
@@ -30,7 +46,7 @@ button { padding: 15px; border: none; border-radius: 10px; font-weight: bold; fo
 <body>
 
 <div class="racun">
-  <h2 id="racunNaslov">RAČUN</h2>
+  <h2 id="racunNaslov">RAČUN #1</h2>
   <div class="artikli" id="artikli"></div>
   <div class="skupaj">SKUPAJ: <span id="skupaj">0.00</span> WII</div>
 </div>
