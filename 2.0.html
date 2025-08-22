@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>WII Blagajna</title>
+<style>
+  :root{
+    --bg:#d0d0d0;
+    --ink:#0b0b0b;
+    --shadow:0 10px 20px rgba(0,0,0,.25);
+    --blue:#0e54ff;
+    --blue-2:#1b6bff;
+    --pink:#ff0f8a;
+    --pink-2:#ff3ea2;
+    --cyan:#0bb4ff;
+    --purple:#8a15ff;
+    --green:#21c77a;
+    --red:#ff4b4b;
+    --yellow:#ffd74a;
+    --card:#f6f7fb;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family: ui-rounded, system-ui, "Segoe UI", Roboto, Helvetica, Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji", "Segoe UI Symbol";
+    color:var(--ink);
+    background:#efefef;
+  }
+  .app{
+    display:grid;
+    grid-template-columns: 440px 1fr;
+    height:100vh;
+    gap:16px;
+    padding:16px;
+  }
+  /* LEFT – RAČUN */
+  .bill{
+    background:#c9c9c9;
+    border-radius:12px;
+    display:grid;
+    grid-template-rows: auto 1fr auto;
+    border:4px solid #bdbdbd;
+    overflow:hidden;
+  }
+  .bill .header{
+    padding:18px 22px;
+    border-bottom:6px solid #999;
+    font-weight:900;
+    font-size:56px;
+    letter-spacing:2px;
+  }
+  .bill .lines{
+    padding:10px 12px 0 12px;
+    overflow:auto;
+  }
+  .line{
+    background:#fff;
+    border-radius:12px;
+    padding:10px 12px;
+    display:grid;
+    grid-template-columns: 34px 1fr 80px 80px;
+    gap:8px;
+    align-items:center;
+    margin-bottom:8px;
+    border:2px solid #e4e4e4;
+    cursor:pointer;
+  }
+  .line.selected{outline:4px solid #222; transform:translateY(-1px)}
+  .pill{
+    min-width:28px;height:28px;border-radius:999px;display:flex;align-items:center;justify-content:center;
+    font-weight:800;background:#eee;
+  }
+  .line .nm{font-weight:800}
+  .line .qty, .line .sum{text-align:right; font-variant-numeric:tabular-nums}
+  .promoP{background:#111;color:#fff}
+  .bill .footer{
+    border-top:6px solid #999;
+    padding:12px 16px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .total-label{
+    font-size:40px;font-weight:900;letter-spacing:1px;
+  }
+  .total-val{
+    font-size:42px;font-weight:900;background:#111;color:#fff;border-radius:14px;padding:6px 14px;min-width:160px;text-align:right;
+  }
+  /* RIGHT – GUMBI */
+  .panel{
+    display:grid;
+    grid-template-columns: repeat(6, 1fr);
+    grid-auto-rows: 88px;
+    gap:18px;
+  }
+  .btn{
+    border:none;
+    border-radius:18px;
+    color:#fff;
+    font-weight:900;
+    font-size:26px;
+    letter-spacing:.5px;
+    box-shadow: var(--shadow);
+    cursor:pointer;
+    transition:.15s transform ease, .15s filter ease, .08s box-shadow ease;
+    position:relative;
+    user-select:none;
+  }
+  .btn span.small{font-size:18px}
+  .btn:active{transform:translateY(2px); box-shadow:0 5px 12px rgba(0,0,0,.2)}
+  .b-blue{background:linear-gradient(180deg, var(--blue), var(--blue-2))}
+  .b-pink{background:linear-gradient(180deg, var(--pink), var(--pink-2))}
+  .b-cyan{background:linear-gradient(180deg, var(--cyan), #1fd3ff)}
+  .b-purple{background:linear-gradient(180deg, var(--purple), #b058ff)}
+  .b-red{background:linear-gradient(180deg, #ff6b6b, #ff4040)}
+  .b-green{background:linear-gradient(180deg, var(--green), #44e39a)}
+  .b-grey{background:linear-gradient(180deg, #7b8a97, #5c6b78)}
+  .btn.big{grid-column: span 3; height:92px; font-size:28px}
+  .btn.wide{grid-column: span 3;}
+  .btn.tall{grid-row: span 2;}
+  .btn.round{border-radius:26px}
+  .btn .price-tag{
+    position:absolute; right:10px; top:10px;
+    background:#000; color:#fff; font-size:14px; font-weight:800; padding:4px 8px; border-radius:10px; opacity:.9;
+    display:none;
+  }
+  .btn.showprice .price-tag{display:block}
+  /* Under-buttons cluster (P.O.F small + bank + zgod + promo …) follow screenshot layout */
+  .btn.small{font-size:22px; padding:0 8px}
+  .btn.tiny{font-size:18px; padding:0 6px}
+  /* Dialog / modal */
+  dialog{
+    border:none; border-radius:20px; padding:0; width:min(720px, 92vw); box-shadow: var(--shadow); overflow:hidden;
+  }
+  .dlg-head{
+    padding:16px 20px; background:#111; color:#fff; font-weight:900; display:flex; align-items:center; justify-content:space-between;
+  }
+  .dlg-body{padding:18px 20px; background:#f7f7fb}
+  .dlg-actions{display:flex; gap:10px; padding:12px 20px 22px 20px; justify-content:flex-end; background:#f7f7fb}
+  .i{
+    width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:#fff;border:2px solid #ddd;
+    box-shadow:inset 0 1px 0 #fff;
+  }
+  .icon{font-weight:900}
+  .row{display:flex;gap:12px; align-items:center; flex-wrap:wrap}
+  input[type="text"],input[type="number"]{
+    padding:12px 14px; border-radius:12px; border:2px solid #d8dbe2; outline:none; font-size:18px; background:#fff; width:100%;
+  }
+  .money-grid{display:grid; grid-template-columns: repeat(6, 1fr); gap:10px}
+  .money{padding:10px 6px; border-radius:10px; border:2px dashed #bbb; background:#fff; font-weight:900; cursor:pointer}
+  .hint{font-size:14px; opacity:.8}
+  .badge{background:#111;color:#fff;border-radius:10px;padding:4px 8px;font-weight:800}
+  .warning{color:#c20}
+  .ok{color:#0a7a2a}
+  .ghost{background:#e9ecf4}
+  .yellow{background:var(--yellow)!important;color:#111}
+  .muted{opacity:.6}
+  .center{text-align:center}
+  .right{text-align:right}
+  .hidden{display:none!important}
+  .flex{display:flex}
+  .space{flex:1}
+  /* Price on item buttons toggle */
+  .legend{position:absolute; inset:10px auto auto 10px; background:#000;color:#fff;border-radius:10px;padding:6px 8px;font-size:13px;opacity:.85}
+  /* Responsive tweak */
+  @media (max-width:1100px){
+    .app{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- LEFT: RAČUN -->
+  <section class="bill" aria-label="račun">
+    <div class="header">RAČUN</div>
+    <div id="lines" class="lines" tabindex="0" aria-live="polite"></div>
+    <div class="footer">
+      <div class="total-label">SKUPAJ</div>
+      <div id="total" class="total-val">0,00 WII</div>
+    </div>
+  </section>
+
+  <!-- RIGHT: GUMBI -->
+  <section class="panel" id="panel">
+    <!-- vrstica 1 -->
+    <button class="btn b-purple tall" data-item="ZVEZDICA"><span>ZVEZDICA</span><span class="price-tag"></span></button>
+    <button class="btn b-purple tall" data-item="IZ.KAZ."><span>IZ.KAZ.</span><span class="price-tag"></span></button>
+    <button class="btn b-blue tall" id="promoBtn">PROMO</button>
+
+    <!-- vrstica 2 -->
+    <button class="btn b-pink" data-item="ZEL. BUR."><span>ZEL. BUR.</span><span class="price-tag"></span></button>
+    <button class="btn b-pink" data-item="M. KISLI."><span>M. KISLI.</span><span class="price-tag"></span></button>
+    <button class="btn b-pink" data-item="R. KISLI."><span>R. KISLI.</span><span class="price-tag"></span></button>
+    <button class="btn b-blue tall" id="pokliciBtn">POKL.</button>
+
+    <!-- vrstica 3 -->
+    <button class="btn b-cyan" data-item="P. VREC."><span>P. VREC.</span><span class="price-tag"></span></button>
+    <button class="btn b-cyan" data-item="VR. NAK."><span>UR. NAK.</span><span class="price-tag"></span></button>
+    <button class="btn b-cyan" data-item="NALEPKA"><span>NALEPKA</span><span class="price-tag"></span></button>
+    <button class="btn b-blue tall" id="zgodovinaBtn">ZGOD.</button>
+
+    <!-- vrstica 4 -->
+    <button class="btn b-pink" data-item="KUVERTA"><span>KUVERTA</span><span class="price-tag"></span></button>
+    <button class="btn b-pink" data-item="POŠT."><span>POŠT.</span><span class="price-tag"></span></button>
+    <button class="btn b-pink" data-item="ZNAM."><span>ZNAM.</span><span class="price-tag"></span></button>
+    <button class="btn b-blue tall" id="bankBtn">BANK.</button>
+
+    <!-- vrstica 5 -->
+    <button class="btn b-pink" data-item="PAK. NAL."><span>PAK. NAL.</span><span class="price-tag"></span></button>
+
+    <button class="btn b-blue small" id="pofBtn" title="Pokaži cene">
+      <span class="small">P. O.F</span>
+    </button>
+
+    <button class="btn b-blue small" id="kolBtn">KOL.</button>
+    <button class="btn b-blue small" id="procentBtn">%</button>
+
+    <!-- spodnji gumbi -->
+    <button class="btn b-blue big" id="paketBtn">NAREDI<br/>PAKET</button>
+    <button class="btn b-pink big" id="placajBtn">KONČAJ IN PLAČAJ</button>
+    <button class="btn b-pink big" id="prilagBtn">KONČAJ IN PRILAG.</button>
+  </section>
+</div>
+
+<!-- DIALOGI -->
+<!-- Plačilo – izbira -->
+<dialog id="payDialog">
+  <div class="dlg-head"><span>PLAČILO</span><button class="btn b-grey tiny" onclick="closeDialog('payDialog')">ZAPRI</button></div>
+  <div class="dlg-body">
+    <div class="row">
+      <button class="btn b-blue big" onclick="openCash()"><span>GOTOVINA</span></button>
+      <button class="btn b-green big" onclick="openCard()"><span>KARTICA</span></button>
+      <div class="space"></div>
+      <div class="badge">Skupaj: <span id="payTotal">0,00</span> WII</div>
+    </div>
+  </div>
+</dialog>
+
+<!-- GOTOVINA -->
+<dialog id="cashDialog">
+  <div class="dlg-head"><span>GOTOVINA</span><button class="btn b-grey tiny" onclick="closeDialog('cashDialog')">ZAPRI</button></div>
+  <div class="dlg-body">
+    <div class="row">
+      <div style="flex:2">
+        <label>Znesek prejet (WII)</label>
+        <input id="cashIn" type="number" step="0.01" min="0" placeholder="0,00" oninput="calcChange()" />
+        <div class="hint">Dodaj hitre bankovce spodaj.</div>
+      </div>
+      <div class="i"><div class="icon">💵</div></div>
+      <div style="flex:1" class="right">
+        <div>Za vrnit: <b id="cashBack">0,00</b> WII</div>
+      </div>
+    </div>
+    <div class="money-grid" style="margin-top:16px">
+      <!-- shortcut banknotes -->
+      <button class="money" onclick="addCash(1)">1</button>
+      <button class="money" onclick="addCash(2)">2</button>
+      <button class="money" onclick="addCash(5)">5</button>
+      <button class="money" onclick="addCash(10)">10</button>
+      <button class="money" onclick="addCash(20)">20</button>
+      <button class="money" onclick="addCash(50)">50</button>
+      <button class="money" onclick="addCash(100)">100</button>
+      <button class="money" onclick="addCash(200)">200</button>
+      <button class="money" onclick="addCash(500)">500</button>
+      <button class="money" onclick="addCash(1000)">1000</button>
+      <button class="money" onclick="addCash(2000)">2000</button>
+      <button class="money" onclick="addCash(5000)">5000</button>
+    </div>
+  </div>
+  <div class="dlg-actions">
+    <button class="btn b-blue" onclick="confirmCash()">POTRDI PLAČILO</button>
+  </div>
+</dialog>
+
+<!-- KARTICA – vnos kode -->
+<dialog id="cardCodeDialog">
+  <div class="dlg-head"><span>KARTICA – KODA</span><button class="btn b-grey tiny" onclick="closeDialog('cardCodeDialog')">ZAPRI</button></div>
+  <div class="dlg-body">
+    <div class="row">
+      <div class="i"><div class="icon">💳</div></div>
+      <input id="cardCode" type="text" placeholder="Vnesi kodo kartice..." />
+      <button class="btn b-green" onclick="openAccount()">ODPRI RAČUN</button>
+    </div>
+    <div class="hint">Koda kartice določi račun v lokalni shrambi brskalnika.</div>
+  </div>
+</dialog>
+
+<!-- BANKA / RAČUN -->
+<dialog id="bankDialog">
+  <div class="dlg-head">
+    <span id="bankTitle">BANKA</span>
+    <button class="btn b-grey tiny" onclick="closeDialog('bankDialog')">ZAPRI</button>
+  </div>
+  <div class="dlg-body">
+    <div class="row">
+      <div class="i"><div class="icon">🏦</div></div>
+      <div class="space">
+        <div>Imetnik: <b id="acctOwner">—</b></div>
+        <div>Stanje: <b id="acctBalance">0,00</b> WII</div>
+      </div>
+    </div>
+  </div>
+  <div class="dlg-actions">
+    <button class="btn b-red" id="payFromCard" onclick="cardPay()">PLAČAJ</button>
+    <button class="btn b-green" onclick="cardLoad()">NALOŽI</button>
+    <button class="btn b-grey" onclick="closeDialog('bankDialog')">ZAPRI</button>
+  </div>
+</dialog>
+
+<!-- % POPUST -->
+<dialog id="percentDialog">
+  <div class="dlg-head"><span>POPUST</span><button class="btn b-grey tiny" onclick="closeDialog('percentDialog')">ZAPRI</button></div>
+  <div class="dlg-body">
+    <div class="row" style="gap:20px">
+      <button class="btn b-blue big" onclick="employeeCoupon()">
+        <div class="icon" style="font-size:36px">👤</div>
+        <div>UPORABNIK</div>
+      </button>
+      <button class="btn b-pink big" onclick="manualPercent()">
+        <div class="icon" style="font-size:36px">✏️</div>
+        <div>SVINČNIK</div>
+      </button>
+      <div class="space"></div>
+      <div class="badge">Skupaj: <span id="pctTotal">0,00</span> WII</div>
+    </div>
+    <div id="pctMsg" class="hint"></div>
+  </div>
+</dialog>
+
+<!-- ZGODOVINA -->
+<dialog id="histDialog">
+  <div class="dlg-head"><span>ZGODOVINA RAČUNOV</span><button class="btn b-grey tiny" onclick="closeDialog('histDialog')">ZAPRI</button></div>
+  <div class="dlg-body" id="histBody"></div>
+</dialog>
+
+<!-- KONČAJ IN PRILAG. -->
+<dialog id="saveDialog">
+  <div class="dlg-head"><span>SHRANI ZA PRIKLIC</span><button class="btn b-grey tiny" onclick="closeDialog('saveDialog')">ZAPRI</button></div>
+  <div class="dlg-body center">
+    <div style="font-size:54px;font-weight:900">Št. računa: <span id="saveNumber">—</span></div>
+    <div class="hint" style="margin-top:8px">Pritisni POTRDI za shranjevanje.</div>
+  </div>
+  <div class="dlg-actions">
+    <button class="btn b-blue" onclick="confirmSave()">POTRDI</button>
+  </div>
+</dialog>
+
+<!-- POKL. – priklic -->
+<dialog id="recallDialog">
+  <div class="dlg-head"><span>PRIKLIC RAČUNA</span><button class="btn b-grey tiny" onclick="closeDialog('recallDialog')">ZAPRI</button></div>
+  <div class="dlg-body">
+    <div class="row">
+      <input id="recallNo" type="number" min="1" placeholder="Vnesi št. računa" />
+      <button class="btn b-blue" onclick="doRecall()">ODPRI</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+/* ====== PODATKI O ARTIKLIH ====== */
+const WII = (n)=> (n).toLocaleString("sl-SI",{minimumFractionDigits:2,maximumFractionDigits:2});
+const items = {
+  "ZVEZDICA": { code:"ZVEZDICA", name:"ZVEZDICA (artikel)", price:12.00, color:"b-purple" },
+  "IZ.KAZ.": { code:"IZ.KAZ.", name:"IZBRIS KAZNI (artikel)", price:47.00, color:"b-purple" },
+  "ZEL. BUR.": { code:"ZEL. BUR.", name:"ŽELE BURGER (artikel)", price:17.40, color:"b-pink" },
+  "M. KISLI.": { code:"M. KISLI.", name:"MODRA KISLICA (artikel)", price:4.70, color:"b-pink" },
+  "R. KISLI.": { code:"R. KISLI.", name:"RDEČA KISLICA (artikel)", price:9.90, color:"b-pink" },
+  "P. VREC.": { code:"P. VREC.", name:"PAPIRNATA VREČKA (artikel)", price:0.35, color:"b-cyan" },
+  "VR. NAK.": { code:"VR. NAK.", name:"VREČKA ZA NAKUP (artikel)", price:3.50, color:"b-cyan" },
+  "NALEPKA": { code:"NALEPKA", name:"NALEPKA (artikel)", price:1.99, color:"b-cyan" },
+  "KUVERTA": { code:"KUVERTA", name:"KUVERTA (artikel)", price:4.00, color:"b-pink" },
+  "POŠT.": { code:"POŠT.", name:"POŠTNINA (artikel)", price:1.30, color:"b-pink" },
+  "PAK. NAL.": { code:"PAK. NAL.", name:"PAKET NALEPKA (artikel)", price:1.00, color:"b-pink" },
+  "ZNAM.": { code:"ZNAM.", name:"ZNAMKA (artikel)", price:0.70, color:"b-pink" }
+};
+
+const paketAuto = ["NALEPKA","ZNAM.","POŠT."];
+/* ====== STANJE ====== */
+let receipt = []; // {code,name,price,qty,promo:false}
+let selectedIndex = -1;
+let percentOff = 0; // 0..1
+let usingPof = false;
+let paketMode = false;
+
+/* ====== PRIKAZ GUMBOV S CENO ====== */
+function refreshButtonPrices(){
+  document.querySelectorAll(".panel .btn[data-item]").forEach(btn=>{
+    const code = btn.getAttribute("data-item");
+    const price = items[code].price;
+    const tag = btn.querySelector(".price-tag");
+    tag.textContent = WII(price) + " WII";
+    if(usingPof) btn.classList.add("showprice"); else btn.classList.remove("showprice");
+  });
+}
+refreshButtonPrices();
+
+/* ====== DODAJ ARTIKEL ====== */
+function addItem(code){
+  if(paketMode){
+    togglePaketPick(code);
+    return;
+  }
+  const meta = items[code];
+  // če isti artikel, povečaj količino
+  const existing = receipt.findIndex(x=>x.code===code && !x.promo);
+  if(existing>-1){
+    receipt[existing].qty += 1;
+    selectLine(existing);
+  }else{
+    receipt.push({code:meta.code,name:meta.name,price:meta.price,qty:1,promo:false});
+    selectLine(receipt.length-1);
+  }
+  renderReceipt();
+}
+
+/* ====== RENDER RAČUNA ====== */
+function renderReceipt(){
+  const host = document.getElementById("lines");
+  host.innerHTML = "";
+  receipt.forEach((r,idx)=>{
+    const row = document.createElement("div");
+    row.className = "line" + (idx===selectedIndex?" selected":"");
+    row.tabIndex = 0;
+    row.onclick = ()=> selectLine(idx);
+    const pill = document.createElement("div");
+    pill.className="pill " + (r.promo?"promoP":"");
+    pill.textContent = r.promo? "P":"•";
+    const nm = document.createElement("div");
+    nm.className="nm"; nm.textContent = r.name;
+    const qty = document.createElement("div");
+    qty.className="qty"; qty.textContent = "× " + r.qty;
+    const sum = document.createElement("div");
+    sum.className="sum";
+    const lineTotal = (r.promo?0:r.price)*r.qty;
+    sum.textContent = WII(lineTotal) + " WII";
+    row.append(pill,nm,qty,sum);
+    host.append(row);
+  });
+  updateTotal();
+}
+function selectLine(i){ selectedIndex = i; renderReceipt(); }
+
+function updateTotal(){
+  const raw = receipt.reduce((s,r)=> s + (r.promo?0:r.price)*r.qty, 0);
+  const after = raw * (1 - percentOff);
+  document.getElementById("total").textContent = WII(after) + " WII";
+}
+
+/* ====== DOGODKI ZA GUMBE ARTIKLOV ====== */
+document.querySelectorAll(".panel .btn[data-item]").forEach(btn=>{
+  btn.addEventListener("click", ()=> addItem(btn.getAttribute("data-item")));
+});
+
+/* ====== PROMO – označi P in cena 0 ====== */
+document.getElementById("promoBtn").onclick = ()=>{
+  if(selectedIndex<0){ alert("Najprej izberi izdelek v računu."); return; }
+  receipt[selectedIndex].promo = !receipt[selectedIndex].promo;
+  renderReceipt();
+};
+
+/* ====== KOLIČINA ====== */
+document.getElementById("kolBtn").onclick = ()=>{
+  if(selectedIndex<0){ alert("Najprej izberi izdelek v računu."); return; }
+  const v = prompt("Vnesi količino:");
+  if(v===null) return;
+  const q = Math.max(0, parseInt(v,10)||0);
+  if(q===0){ receipt.splice(selectedIndex,1); selectedIndex=-1; }
+  else receipt[selectedIndex].qty = q;
+  renderReceipt();
+};
+
+/* ====== P.O.F. – pokaži cene na gumbih ====== */
+document.getElementById("pofBtn").onclick = ()=>{
+  usingPof = !usingPof;
+  refreshButtonPrices();
+};
+
+/* ====== % POPUST ====== */
+document.getElementById("procentBtn").onclick = ()=>{
+  document.getElementById("pctTotal").textContent = WII(currentTotal());
+  document.getElementById("pctMsg").textContent = "";
+  openDialog('percentDialog');
+};
+
+function manualPercent(){
+  const v = prompt("Koliko % želiš znižati ceno? (0–100)");
+  if(v===null) return;
+  const p = Math.max(0, Math.min(100, Number(v)||0));
+  percentOff = p/100;
+  renderReceipt();
+  closeDialog('percentDialog');
+}
+
+function employeeCoupon(){
+  const last3 = prompt("Vnesi zadnje tri številke delovne kartice:");
+  if(last3===null || !/^\d{3}$/.test(last3)){ alert("Vnesi točno tri številke."); return; }
+  const key = "WII_coupon_"+new Date().toISOString().slice(0,10)+"_"+last3;
+  const used = Number(localStorage.getItem(key)||"0");
+  if(used>=3){
+    alert("Ta kartica je danes že izkoristila 3× kupon.");
+    return;
+  }
+  const name = "Uporabnik "+last3;
+  if(confirm(name+": Želite uporabiti 40% kupona?")){
+    percentOff = 0.40;
+    localStorage.setItem(key, String(used+1));
+    renderReceipt();
+    closeDialog('percentDialog');
+  }
+}
+
+/* ====== NAREDI PAKET ====== */
+let paketPicked = [];
+document.getElementById("paketBtn").onclick = ()=>{
+  paketMode = !paketMode;
+  paketPicked = [];
+  document.querySelectorAll(".panel .btn[data-item]").forEach(b=>{
+    b.classList.toggle("yellow", paketMode);
+  });
+  if(!paketMode) return;
+  alert("Izberi do 3 artikle za paket. Samodejno se dodajo: NALEPKA, ZNAM., POŠT.");
+};
+function togglePaketPick(code){
+  if(paketPicked.includes(code)){
+    paketPicked = paketPicked.filter(x=>x!==code);
+  }else{
+    if(paketPicked.length>=3){ alert("V paketu so lahko največ 3 artikli."); return; }
+    paketPicked.push(code);
+  }
+  // vizualno utrip – dodamo 1 kos izbranega
+  addItem(code);
+  // če dosežemo 3 ali uporabnik ponovno klikne NAREDI PAKET (off), dokončaj
+  if(paketPicked.length===3){
+    finishPaket();
+  }
+}
+function finishPaket(){
+  paketAuto.forEach(c=> addItem(c));
+  paketMode = false;
+  paketPicked = [];
+  document.querySelectorAll(".panel .btn[data-item]").forEach(b=> b.classList.remove("yellow"));
+  alert("Paket sestavljen.");
+}
+
+/* ====== PLAČAJ ====== */
+document.getElementById("placajBtn").onclick = ()=>{
+  if(receipt.length===0){ alert("Račun je prazen."); return; }
+  document.getElementById("payTotal").textContent = WII(currentTotal());
+  openDialog('payDialog');
+};
+function currentTotal(){
+  return +(receipt.reduce((s,r)=> s + (r.promo?0:r.price)*r.qty, 0) * (1 - percentOff)).toFixed(2);
+}
+
+/* GOTOVINA */
+function openCash(){ closeDialog('payDialog'); document.getElementById("cashIn").value=""; document.getElementById("cashBack").textContent=WII(0); openDialog('cashDialog'); }
+function addCash(v){ const inp = document.getElementById("cashIn"); inp.value = Number(inp.value||0)+v; calcChange(); }
+function calcChange(){
+  const got = Number(document.getElementById("cashIn").value||0);
+  const back = Math.max(0, got - currentTotal());
+  document.getElementById("cashBack").textContent = WII(back);
+}
+function confirmCash(){
+  const got = Number(document.getElementById("cashIn").value||0);
+  if(got < currentTotal()){ alert("Prejeto premalo gotovine."); return; }
+  finalizeSale("GOTOVINA", {prejeto: got, vracilo: +(got-currentTotal()).toFixed(2)});
+  closeDialog('cashDialog');
+}
+
+/* KARTICA */
+function openCard(){ closeDialog('payDialog'); openDialog('cardCodeDialog'); }
+function openAccount(){
+  const code = (document.getElementById("cardCode").value||"").trim();
+  if(!code){ alert("Vnesi kodo kartice."); return; }
+  const acc = getAccount(code);
+  currentAccount = {code, ...acc};
+  document.getElementById("acctOwner").textContent = acc.owner;
+  document.getElementById("acctBalance").textContent = WII(acc.balance);
+  document.getElementById("bankTitle").textContent = "BANČNI RAČUN – " + code;
+  closeDialog('cardCodeDialog'); openDialog('bankDialog');
+}
+let currentAccount = null;
+function getAccount(code){
+  const key = "WII_account_"+code;
+  const raw = localStorage.getItem(key);
+  if(raw) return JSON.parse(raw);
+  const acc = {owner:"Imetnik "+code, balance: 0};
+  localStorage.setItem(key, JSON.stringify(acc));
+  return acc;
+}
+function setAccount(code,acc){
+  localStorage.setItem("WII_account_"+code, JSON.stringify(acc));
+}
+function cardPay(){
+  if(!currentAccount) return;
+  const tot = currentTotal();
+  const acc = getAccount(currentAccount.code);
+  if(acc.balance < tot){ alert("Na računu ni dovolj sredstev."); return; }
+  acc.balance = +(acc.balance - tot).toFixed(2);
+  setAccount(currentAccount.code, acc);
+  document.getElementById("acctBalance").textContent = WII(acc.balance);
+  finalizeSale("KARTICA", {racun: currentAccount.code});
+  closeDialog('bankDialog');
+}
+function cardLoad(){
+  const v = prompt("Znesek za naložiti (WII):");
+  if(v===null) return;
+  const add = Math.max(0, Number(v)||0);
+  const acc = getAccount(currentAccount.code);
+  acc.balance = +(acc.balance + add).toFixed(2);
+  setAccount(currentAccount.code, acc);
+  document.getElementById("acctBalance").textContent = WII(acc.balance);
+  alert("Naloženo: "+WII(add)+" WII");
+}
+
+/* ====== ZGODOVINA ====== */
+document.getElementById("zgodovinaBtn").onclick = ()=>{
+  const hist = JSON.parse(localStorage.getItem("WII_hist")||"[]").reverse();
+  const host = document.getElementById("histBody");
+  host.innerHTML = "";
+  if(hist.length===0){ host.innerHTML = "<div class='muted'>Ni shranjenih računov.</div>"; }
+  hist.forEach(h=>{
+    const div = document.createElement("div");
+    div.style.padding="10px 12px";
+    div.style.marginBottom="8px";
+    div.style.background="#fff";
+    div.style.border="2px solid #e4e4e4";
+    div.style.borderRadius="12px";
+    div.innerHTML = `<div><b>#${h.id}</b> • ${new Date(h.time).toLocaleString("sl-SI")}</div>
+                     <div>Način: ${h.method}</div>
+                     <div>Skupaj: <b>${WII(h.total)} WII</b></div>`;
+    host.append(div);
+  });
+  openDialog('histDialog');
+});
+
+/* ====== BANK. (bližnjica) ====== */
+document.getElementById("bankBtn").onclick = ()=>{ openCard(); };
+
+/* ====== KONČAJ IN PRILAG. ====== */
+document.getElementById("prilagBtn").onclick = ()=>{
+  if(receipt.length===0){ alert("Račun je prazen."); return; }
+  const num = nextSavedNumber();
+  document.getElementById("saveNumber").textContent = num;
+  openDialog('saveDialog');
+};
+function nextSavedNumber(){
+  const n = Number(localStorage.getItem("WII_save_no")||"1000")+1;
+  localStorage.setItem("WII_save_no", String(n));
+  return n;
+}
+function confirmSave(){
+  const no = Number(document.getElementById("saveNumber").textContent);
+  const data = {id:no, items:receipt, percentOff, time:Date.now()};
+  const list = JSON.parse(localStorage.getItem("WII_saved")||"[]");
+  list.push(data);
+  localStorage.setItem("WII_saved", JSON.stringify(list));
+  closeDialog('saveDialog');
+  clearReceipt();
+  alert("Račun #"+no+" shranjen za priklic.");
+}
+
+/* ====== POKL. – priklic shranjenega ====== */
+document.getElementById("pokliciBtn").onclick = ()=> openDialog('recallDialog');
+function doRecall(){
+  const no = Number(document.getElementById("recallNo").value||"0");
+  const list = JSON.parse(localStorage.getItem("WII_saved")||"[]");
+  const found = list.find(x=>x.id===no);
+  if(!found){ alert("Račun #"+no+" ni najden."); return; }
+  receipt = JSON.parse(JSON.stringify(found.items));
+  percentOff = found.percentOff||0;
+  renderReceipt();
+  closeDialog('recallDialog');
+  // Po želji lahko račun po odprtju tudi izbrišemo iz "shranjenih".
+}
+
+/* ====== FINALIZACIJA ====== */
+function finalizeSale(method, extra={}){
+  const total = currentTotal();
+  // shrani v zgodovino
+  const hist = JSON.parse(localStorage.getItem("WII_hist")||"[]");
+  const id = (hist.slice(-1)[0]?.id||0)+1;
+  hist.push({id, time:Date.now(), method, total, items:receipt, percentOff, ...extra});
+  localStorage.setItem("WII_hist", JSON.stringify(hist));
+  alert("Plačano ("+method+"). Skupaj: "+WII(total)+" WII");
+  clearReceipt();
+}
+function clearReceipt(){
+  receipt = [];
+  percentOff = 0;
+  selectedIndex = -1;
+  renderReceipt();
+}
+
+/* ====== DIALOG POMOČNE ====== */
+function openDialog(id){ document.getElementById(id).showModal(); }
+function closeDialog(id){ document.getElementById(id).close(); }
+
+/* Klaviaturne bližnjice (ESC zapre modale) */
+document.addEventListener("keydown", (e)=>{
+  if(e.key==="Escape"){
+    document.querySelectorAll("dialog[open]").forEach(d=>d.close());
+  }
+});
+</script>
+</body>
+</html>
