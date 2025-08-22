@@ -76,7 +76,7 @@ body.fullscreen .gumbi { grid-template-columns: repeat(auto-fill, minmax(120px, 
 
 <div class="gumbi">
   <!-- Artikli -->
-  <button class="violet" onclick="dodaj('ZVEZDICA /-51%/',5.88)">ZVEZDICA</button>
+  <button class="violet" onclick="dodaj('ZVEZDICA',12)">ZVEZDICA</button>
   <button class="violet" onclick="dodaj('IZBRIS KAZNI',47)">IZ.KAZ.</button>
   <button class="pink" onclick="dodaj('ŽELE BURGER',17.40)">ZEL.BUR.</button>
   <button class="pink" onclick="dodaj('MODRA KISLICA',4.70)">M. KISLI.</button>
@@ -127,7 +127,7 @@ let banke = { TJ17: {ime:"Tinkara Jelen", stanje:100}, AJ17: {ime:"Anže Jelen",
 let paketIzbran = false;
 let stevecRacunov = (zgodovinaRacunov.length>0?zgodovinaRacunov[zgodovinaRacunov.length-1].racun+1:1);
 let popusti = JSON.parse(localStorage.getItem("popusti")||"{}");
-let zaposleni = { "000":"Jaša Petrinjak", "172":"Anže Jelen", "142":"Tinkara Jelen" };
+let zaposleni = { "000":"Jaša Petrinjak", "172":"Anže Jelen", "142":"Tinkara Jelen", "693":"NAGRADA" };
 let trenutniPopust = null;
 
 function shrani(){ 
