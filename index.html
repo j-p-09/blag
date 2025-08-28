@@ -2,7 +2,7 @@
 <html lang="sl">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WII Blagajna</title>
 <style>
   :root{
@@ -54,7 +54,7 @@
   .pad{display:grid; grid-template-columns: repeat(5, 1fr); grid-auto-rows: 86px; gap:16px; align-content:start}
   .btn{
     position:relative; border:none; cursor:pointer; border-radius:20px; font-weight:900; font-size:24px; letter-spacing:1px;
-    box-shadow: 0 8px 0 rgba(0,0,0,.35); transition: transform .05s ease, filter .1s ease;
+    box-shadow: 0 8px 0 rgba(0,0,0,.35); transition: transform .05s ease, filter .1s ease, opacity .1s ease;
     color:#fff; text-shadow:0 1px 1px rgba(0,0,0,.4);
   }
   .btn:active{transform: translateY(2px); box-shadow: 0 6px 0 rgba(0,0,0,.3)}
@@ -68,6 +68,14 @@
   .btn.tall{grid-row: span 2}
   .badge-price{position:absolute; right:8px; top:8px; font-size:14px; background:#000c; padding:3px 6px; border-radius:8px; display:none}
   .show-prices .badge-price{display:block}
+
+  /* Zatemnjen / onemogočen gumb (manager) */
+  .btn.is-disabled{
+    filter: grayscale(1) saturate(0.2) brightness(0.75) contrast(0.9);
+    opacity:.55;
+    cursor:not-allowed !important;
+    pointer-events:none; /* res ne deluje */
+  }
 
   .legend{position:absolute; inset:auto 12px 10px auto; opacity:.75; font-size:12px}
 
@@ -387,6 +395,10 @@ let holds = loadLS('wii_holds', {});
 let couponUse = loadLS('wii_coupon_use', {}); // {date: {last3: count}}
 let session = loadLS('wii_session', { employee:null, loginTime:null, openingCash:0 });
 
+/* Manager: onemogočeni gumbi (persist) */
+let disabledButtons = loadLS('wii_disabled_buttons', {}); // {key:true}
+const EXEMPT_IDS = new Set(['btnPOF','btnManager']); // P.O.F. in MANAGER vedno delujeta
+
 function fmt(n){
   const v = (Math.round((+n + Number.EPSILON)*100)/100).toFixed(2);
   return v.replace('.', ',') + WII;
@@ -451,22 +463,34 @@ function renderBill(){
  * GUMBI ARTIKLOV  *
  *******************/
 const pad = document.getElementById('pad');
-let showPrices=false;
+
+/* P.O.F. – vedno deluje, stanje ostane (persist) */
+let showPrices = loadLS('wii_show_prices', false);
 function refreshButtonBadges(){
   document.querySelectorAll('.btn[data-item]').forEach(btn=>{
-    const price = +btn.dataset.price; btn.querySelector('.badge-price').textContent = fmtNoWii(price)
+    const price = +btn.dataset.price;
+    const badge = btn.querySelector('.badge-price');
+    if(badge) badge.textContent = fmtNoWii(price);
   });
   pad.classList.toggle('show-prices', showPrices);
 }
 refreshButtonBadges();
 
 pad.addEventListener('click', (e)=>{
-  const btn = e.target.closest('.btn[data-item]');
-  if(!btn) return;
-  addItem(btn.dataset.item, btn.dataset.price);
+  const targetBtn = e.target.closest('.btn');
+  if(!targetBtn) return;
+  // če je to artikel, dodaj – (manager onemogočanje že blokira preko pointer-events)
+  const itemBtn = e.target.closest('.btn[data-item]');
+  if(itemBtn){
+    addItem(itemBtn.dataset.item, itemBtn.dataset.price);
+  }
 });
 
-document.getElementById('btnPOF').onclick=()=>{ showPrices=!showPrices; refreshButtonBadges(); };
+document.getElementById('btnPOF').onclick=()=>{ 
+  showPrices=!showPrices; 
+  saveLS('wii_show_prices', showPrices);
+  refreshButtonBadges(); 
+};
 
 document.getElementById('btnPROMO').onclick=()=>{
   if(selectedIndex<0){ alert('Najprej izberi artikel v tabeli RAČUN.'); return }
@@ -695,7 +719,6 @@ document.getElementById('card-code').addEventListener('input', (e)=>{
 });
 
 // BAN.K
-
 document.getElementById('btnBANK').onclick=()=>{
   document.getElementById('bank-code').value='';
   document.getElementById('bank-acct').style.display='none';
@@ -716,18 +739,111 @@ function updateCurrentEmployee(){
 }
 updateCurrentEmployee();
 
+/* Helperji za onemogočanje gumbov */
+function getPadButtons(){
+  return Array.from(document.querySelectorAll('#pad .btn'));
+}
+function buttonKey(btn){
+  // Ključ za persist: data-item ali id
+  if(btn.id && EXEMPT_IDS.has(btn.id)) return null; // P.O.F. + MANAGER so izvzeti
+  if(btn.dataset.item) return 'item:'+btn.dataset.item;
+  if(btn.id) return 'id:'+btn.id;
+  return null;
+}
+function applyDisabled(){
+  getPadButtons().forEach(btn=>{
+    // P.O.F. in MANAGER vedno delujeta
+    if(btn.id && EXEMPT_IDS.has(btn.id)){
+      btn.classList.remove('is-disabled');
+      btn.setAttribute('aria-disabled','false');
+      return;
+    }
+    const key = buttonKey(btn);
+    const isDis = !!(key && disabledButtons[key]);
+    btn.classList.toggle('is-disabled', isDis);
+    btn.setAttribute('aria-disabled', isDis ? 'true':'false');
+  });
+}
+applyDisabled();
+
 function openManager(){
   document.getElementById('mgr-code').value='';
   document.getElementById('mgr-area').style.display='none';
   document.getElementById('mgr-content').innerHTML='';
   openModal('modal-manager');
 }
-
 document.getElementById('btnManager').onclick=openManager;
+
+function renderManagerPanel(){
+  const wrap = document.getElementById('mgr-content');
+  // seznam gumbov z možnostjo ON/OFF
+  const btns = getPadButtons();
+  const rows = btns.map(btn=>{
+    const key = buttonKey(btn);
+    const label = btn.dataset.item ? btn.dataset.item : (btn.textContent || btn.id || 'GUMB').trim();
+    const exempt = (btn.id && EXEMPT_IDS.has(btn.id));
+    const checked = key ? !!disabledButtons[key] : false;
+    const hint = exempt ? ' (vedno omogočen)' : '';
+    return `
+      <div class="history-item" style="display:flex; align-items:center; justify-content:space-between; gap:8px">
+        <div><strong>${label}</strong>${hint}</div>
+        <label style="display:flex; align-items:center; gap:6px">
+          <span style="font-size:12px;opacity:.8">Onemogoči</span>
+          <input type="checkbox" data-toggle-key="${key||''}" ${checked?'checked':''} ${exempt?'disabled':''}/>
+        </label>
+      </div>
+    `;
+  }).join('');
+  wrap.innerHTML = `
+    <div class="acct">
+      <h3>Nastavitve gumbov</h3>
+      <p class="note">Označi <em>Onemogoči</em> za gumbe, ki naj začasno ne delujejo. P.O.F. in MANAGER sta vedno omogočena.</p>
+      <div style="display:grid; gap:8px; max-height:50vh; overflow:auto">
+        ${rows}
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="mgr-enable-all">Omogoči vse</button>
+        <button class="btn danger" id="mgr-disable-all">Onemogoči vse (razen P.O.F. & MANAGER)</button>
+      </div>
+    </div>
+  `;
+
+  wrap.querySelectorAll('input[type="checkbox"][data-toggle-key]').forEach(chk=>{
+    chk.addEventListener('change', ()=>{
+      const key = chk.getAttribute('data-toggle-key');
+      if(!key) return;
+      disabledButtons[key] = chk.checked ? true : false;
+      if(!disabledButtons[key]) delete disabledButtons[key];
+      saveLS('wii_disabled_buttons', disabledButtons);
+      applyDisabled();
+    });
+  });
+
+  const ena = wrap.querySelector('#mgr-enable-all');
+  if(ena) ena.onclick=()=>{
+    disabledButtons = {};
+    saveLS('wii_disabled_buttons', disabledButtons);
+    applyDisabled();
+    renderManagerPanel();
+  };
+  const disa = wrap.querySelector('#mgr-disable-all');
+  if(disa) disa.onclick=()=>{
+    disabledButtons = {};
+    getPadButtons().forEach(btn=>{
+      if(btn.id && EXEMPT_IDS.has(btn.id)) return;
+      const key = buttonKey(btn);
+      if(key) disabledButtons[key] = true;
+    });
+    saveLS('wii_disabled_buttons', disabledButtons);
+    applyDisabled();
+    renderManagerPanel();
+  };
+}
 
 document.getElementById('mgr-code').addEventListener('input', e=>{
   if(e.target.value.trim()==='000'){
     document.getElementById('mgr-area').style.display='block';
+    renderManagerPanel();
   } else {
     document.getElementById('mgr-area').style.display='none';
   }
@@ -799,6 +915,8 @@ Array.from(document.querySelectorAll('.modal')).forEach(m=>{
 
 // Inicialni render
 renderBill();
+applyDisabled(); // za vsak slučaj po init
+refreshButtonBadges(); // obnovi značke cen
 </script>
 </body>
 </html>
