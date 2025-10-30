@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WII Blagajna</title>
+<title>WII Blagajna (posodobljeno)</title>
 <style>
   :root{
     --bg:#0b0b0f; /* ozadje aplikacije */
@@ -45,10 +45,15 @@
   .bill-row .name{font-weight:700}
   .bill-row .qty{justify-self:end}
   .bill-row .sum{justify-self:end}
+  .item-discount{font-size:12px; color:#111; opacity:0.8; margin-top:4px}
   .total{
+    margin-top:-30px; /* dvignjeno malo višje */
+    transform: translateY(-20px); /* vizualno višje */
+    
     display:flex; align-items:center; justify-content:space-between; padding:10px 16px; font-size:44px; font-weight:900
   }
   .total small{font-size:22px; color:#333}
+  .total .discount-line{font-size:16px; font-weight:700; color:#222; margin-top:6px}
 
   /* Desni del – gumbi */
   .pad{display:grid; grid-template-columns: repeat(5, 1fr); grid-auto-rows: 86px; gap:16px; align-content:start}
@@ -134,7 +139,12 @@
     <div class="bill-list" id="billList">
       <div class="bill-empty">Dodaj artikle s klikom na gumbe desno…</div>
     </div>
-    <div class="total"> <small>SKUPAJ</small> <span id="total">0,00 WII</span> </div>
+    <div class="total"> <div>
+      <small>SKUPAJ</small>
+      <div id="total" style="font-size:44px; font-weight:900">0,00 WII</div>
+      <div id="total-discount-line" class="discount-line" style="display:none"></div>
+    </div>
+    </div>
   </section>
 
   <!-- Desni del -->
@@ -287,8 +297,16 @@
   <div class="dialog">
     <h2>Popust</h2>
     <div class="row">
-      <button class="btn blue" id="disc-user">🧑 Uporabnik (40%)</button>
-      <button class="btn blue" id="disc-manual">✏️ Ročni %</button>
+      <div style="flex:1">
+        <div style="margin-bottom:8px">
+          <label><input type="radio" name="disc-scope" value="total" checked> Popust na CELOTEN NAKUP</label>
+          <label style="margin-left:12px"><input type="radio" name="disc-scope" value="item"> Popust na IZBRAN IZDELEK</label>
+        </div>
+        <div class="row">
+          <button class="btn blue" id="disc-user">🧑 Uporabnik (40%)</button>
+          <button class="btn blue" id="disc-manual">✏️ Ročni %</button>
+        </div>
+      </div>
     </div>
     <div id="disc-user-pane" style="display:none; margin-top:12px">
       <label>Zadnje 3 številke delovne kartice:
@@ -349,12 +367,13 @@
   </div>
 </div>
 
+<!-- Manager modal (koda je tipa password — številke so skrite) -->
 <div class="modal" id="modal-manager">
   <div class="dialog">
     <h2>MANAGER</h2>
-    <p>Za dostop vnesi pravilno kodo (000).</p>
+    <p>Za dostop vnesi pravilno kodo (skrito).</p>
     <label>Koda:
-      <input id="mgr-code" inputmode="numeric" style="width:100%; font-size:22px; padding:8px; border-radius:10px; border:1px solid #333; background:#111; color:#fff" />
+      <input id="mgr-code" type="password" inputmode="numeric" style="width:100%; font-size:22px; padding:8px; border-radius:10px; border:1px solid #333; background:#111; color:#fff" />
     </label>
     <div class="numpad" data-target="mgr-code"></div>
     <div id="mgr-area" style="display:none; margin-top:12px">
@@ -419,13 +438,13 @@ function todayKey(){
 /****************
  * STANJE RAČUNA *
  ****************/
-let bill = { items:[], discountPct:0, userCoupon:null };
+let bill = { items:[], discountPct:0, discountTarget:'total', userCoupon:null };
 let selectedIndex = -1;
 
 function addItem(name, price){
-  const existing = bill.items.find(i=>i.name===name && !i.promo);
+  const existing = bill.items.find(i=>i.name===name && !i.promo && !i.packageItem);
   if(existing){ existing.qty += 1; }
-  else bill.items.push({ name, price:+price, qty:1, promo:false });
+  else bill.items.push({ name, price:+price, qty:1, promo:false, discountPct:0 });
   renderBill();
 }
 
@@ -437,11 +456,18 @@ function togglePromo(index){
 }
 
 function calcSubtotal(){
-  return bill.items.reduce((s,i)=> s + (i.promo?0:i.price*i.qty), 0);
+  // subtotal after per-item discounts (if any)
+  return bill.items.reduce((s,i)=>{
+    const base = i.promo?0:i.price*i.qty;
+    const afterItem = i.discountPct ? base * (1 - i.discountPct/100) : base;
+    return s + afterItem;
+  }, 0);
 }
 function calcTotal(){
   let sub = calcSubtotal();
-  if(bill.discountPct>0){ sub = sub * (1 - bill.discountPct/100); }
+  if(bill.discountPct>0 && bill.discountTarget==='total'){
+    sub = sub * (1 - bill.discountPct/100);
+  }
   return Math.max(0, sub);
 }
 
@@ -454,10 +480,35 @@ function renderBill(){
     row.onclick=()=>{selectedIndex=idx; renderBill()};
     const name = document.createElement('div'); name.className='name'; name.textContent=(it.promo?'P ':'')+it.name;
     const qty = document.createElement('div'); qty.className='qty'; qty.textContent='x'+it.qty;
-    const sum = document.createElement('div'); sum.className='sum'; sum.textContent=fmt(it.promo?0:it.price*it.qty);
-    row.append(name,qty,sum); list.appendChild(row);
+    const sum = document.createElement('div'); sum.className='sum';
+    // compute display price considering per-item discount
+    const base = it.promo?0:it.price*it.qty;
+    const itemAfter = it.discountPct ? base * (1 - it.discountPct/100) : base;
+    sum.textContent = fmt(itemAfter);
+    row.append(name,qty,sum);
+    // show discount line per item if exists
+    if(it.discountPct && it.discountPct>0){
+      const discEl = document.createElement('div');
+      const discAmount = base - itemAfter;
+      discEl.className='item-discount';
+      discEl.textContent = `Popust: ${it.discountPct}% ( - ${fmtNoWii(discAmount)} WII )`;
+      name.appendChild(discEl);
+    }
+    list.appendChild(row);
   });
   document.getElementById('total').textContent = fmt(calcTotal());
+  // show total discount line if applicable and scope total
+  const totalDiscLine = document.getElementById('total-discount-line');
+  if(bill.discountPct>0 && bill.discountTarget==='total'){
+    const before = bill.items.reduce((s,i)=> s + (i.promo?0:i.price*i.qty), 0);
+    const afterItems = calcSubtotal();
+    const globalDiscAmount = before - (afterItems * (1 - bill.discountPct/100));
+    totalDiscLine.style.display='block';
+    totalDiscLine.textContent = `Popust: ${bill.discountPct}% ( - ${fmtNoWii(globalDiscAmount)} WII )`;
+  } else {
+    totalDiscLine.style.display='none';
+    totalDiscLine.textContent = '';
+  }
 }
 
 /*******************
@@ -526,6 +577,9 @@ document.getElementById('btnPercent').onclick=()=>{
   document.getElementById('disc-user-info').textContent='';
   discUserPane.style.display='none';
   discManualPane.style.display='none';
+  // default scope
+  const radios = document.getElementsByName('disc-scope');
+  radios.forEach(r=> r.checked = (r.value==='total'));
   openModal('modal-discount');
 };
 document.getElementById('disc-user').onclick=()=>{ discUserPane.style.display='block'; discManualPane.style.display='none'; };
@@ -542,17 +596,39 @@ function registerCoupon(last3){
 }
 
 document.getElementById('disc-apply').onclick=()=>{
+  // get scope
+  const scope = document.querySelector('input[name="disc-scope"]:checked')?.value || 'total';
   if(discUserPane.style.display==='block'){
     const last3 = (document.getElementById('disc-last3').value||'').trim();
     const emp = employees[last3];
     if(!emp){ alert('Ni zaposlenega s to kodo.'); return }
     if(!canUseCoupon(last3)){ alert('Kupon 40% je bil danes že uporabljen 3× za to kartico.'); return }
-    bill.discountPct = 40; bill.userCoupon = last3; registerCoupon(last3);
-    alert(`${emp.name}: uporabljen 40% kupon.`);
+    if(scope==='total'){
+      bill.discountPct = 40; bill.discountTarget='total'; bill.userCoupon = last3; registerCoupon(last3);
+      alert(`${emp.name}: uporabljen 40% kupon na CELOTEN NAKUP.`);
+    } else {
+      if(selectedIndex<0){ alert('Za popust na izdelek najprej izberi artikel.'); return }
+      const it = bill.items[selectedIndex];
+      it.discountPct = 40;
+      bill.userCoupon = last3;
+      registerCoupon(last3);
+      alert(`${emp.name}: uporabljen 40% kupon na izdelek ${it.name}.`);
+    }
   } else if(discManualPane.style.display==='block'){
     const pct = parseNum(document.getElementById('disc-manual-input').value);
     if(pct<0||pct>100){ alert('Vnesi % med 0 in 100.'); return }
-    bill.discountPct = pct; bill.userCoupon=null;
+    if(scope==='total'){
+      bill.discountPct = pct; bill.discountTarget='total'; bill.userCoupon=null;
+      alert(`Uporabljen ${pct}% popust na CELOTEN NAKUP.`);
+    } else {
+      if(selectedIndex<0){ alert('Za popust na izdelek najprej izberi artikel.'); return }
+      const it = bill.items[selectedIndex];
+      it.discountPct = pct;
+      alert(`Uporabljen ${pct}% popust na izdelek ${it.name}.`);
+    }
+  } else {
+    alert('Izberi tip popusta (Uporabnik ali Ročni).');
+    return;
   }
   renderBill(); closeModal('modal-discount');
 };
@@ -614,7 +690,7 @@ function openHold(){
   openModal('modal-hold');
   document.getElementById('hold-confirm').onclick=()=>{
     holds[id] = JSON.parse(JSON.stringify(bill)); saveLS('wii_holds', holds);
-    bill = { items:[], discountPct:0, userCoupon:null }; selectedIndex=-1; renderBill();
+    bill = { items:[], discountPct:0, discountTarget:'total', userCoupon:null }; selectedIndex=-1; renderBill();
     closeModal('modal-hold');
     alert('Račun shranjen za PRIKLIC: #'+id);
   };
@@ -841,15 +917,6 @@ function renderManagerPanel(){
   };
 }
 
-document.getElementById('mgr-code').addEventListener('input', e=>{
-  if(e.target.value.trim()==='17426'){
-    document.getElementById('mgr-area').style.display='block';
-    renderManagerPanel();
-  } else {
-    document.getElementById('mgr-area').style.display='none';
-  }
-});
-
 document.getElementById('mgr-login').onclick=()=>{
   const last3 = prompt('Vnesi zadnje 3 številke zaposlenega (142/172/…):','');
   if(!employees[last3]){ alert('Neznan zaposleni.'); return }
@@ -877,7 +944,7 @@ function completeSale(method){
   const rec = { id, time: Date.now(), items: bill.items, subtotal: calcSubtotal(), discountPct: bill.discountPct, total: calcTotal(), method, employee: employees[session.employee]?.name || null };
   history.push(rec); saveLS('wii_history', history);
   // Po plačilu ponastavi račun
-  bill = { items:[], discountPct:0, userCoupon:null }; selectedIndex=-1; renderBill();
+  bill = { items:[], discountPct:0, discountTarget:'total', userCoupon:null }; selectedIndex=-1; renderBill();
   alert('Račun zaključen. #'+id);
 }
 
@@ -918,6 +985,64 @@ Array.from(document.querySelectorAll('.modal')).forEach(m=>{
 renderBill();
 applyDisabled(); // za vsak slučaj po init
 refreshButtonBadges(); // obnovi značke cen
+
+// === MANAGER ACCESS WRAPPER (BEZ PROMPT) ===
+// This wrapper preserves original onclick handlers and requires manager code '17426'.
+// Instead of prompt (which shows characters), we open the manager modal (password input).
+let _managerAuthCallback = null;
+;(function(){
+  function askManagerAndRun(action){
+    try{
+      if(session && session.employee === '000'){ action(); return; }
+    }catch(e){}
+    // show modal and store callback
+    _managerAuthCallback = action;
+    openManager();
+    // focus the masked input
+    setTimeout(()=>{ document.getElementById('mgr-code').focus(); }, 200);
+  }
+
+  const ids = ['btnPROMO','btnPercent','btnBANK','btnPOKL'];
+  ids.forEach(function(id){
+    const el = document.getElementById(id);
+    if(!el) return;
+    // store original handler
+    const orig = el.onclick;
+    el.onclick = function(e){
+      askManagerAndRun(function(){
+        try{
+          if(typeof orig === 'function') orig.call(el, e);
+          else if(typeof orig === 'string') (new Function(orig)).call(el);
+        }catch(err){
+          console.error('Error running original handler for', id, err);
+        }
+      });
+    };
+  });
+})();
+
+// mgr-code input: either opens manager area (if no callback) or runs stored callback (manager-auth)
+document.getElementById('mgr-code').addEventListener('input', e=>{
+  const v = e.target.value.trim();
+  if(v === '17426'){
+    // clear input immediately (numbers hidden anyway), then act
+    e.target.value = '';
+    // if there is an awaiting auth callback, run it and clear
+    if(typeof _managerAuthCallback === 'function'){
+      const cb = _managerAuthCallback; _managerAuthCallback = null;
+      closeModal('modal-manager');
+      cb();
+      return;
+    }
+    // otherwise show manager area
+    document.getElementById('mgr-area').style.display='block';
+    renderManagerPanel();
+  } else {
+    // hide area while typing wrong code
+    document.getElementById('mgr-area').style.display='none';
+  }
+});
+
 </script>
 </body>
 </html>
