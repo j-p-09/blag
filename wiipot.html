@@ -18,9 +18,10 @@
   button.ghost{background:transparent;color:var(--accent);border:1px solid #cfe3fb}
   button.danger{background:var(--danger)}
   .grid{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;padding:8px}
-  .cell{background:#f7fbff;border:1px dashed #dbeffd;padding:10px;text-align:center;border-radius:6px;cursor:pointer;user-select:none}
-  .cell.reserved{background:#ffeccf;border:1px solid #ffd689}
+  .cell{background:#f7fbff;border:1px dashed #dbeffd;padding:10px;text-align:center;border-radius:6px;cursor:pointer;user-select:none;transition:all .2s}
+  .cell.reserved{background:#ffeccf;border:1px solid #ffd689;cursor:not-allowed}
   .cell.winner{box-shadow:0 0 0 3px rgba(255,215,0,0.12) inset}
+  .cell.multi-select{background:#c8facc!important;border-color:#6ee7b7!important}
   .controls{display:flex;gap:8px;align-items:center}
   .badge{background:#eef6ff;color:#0b3a66;padding:6px 8px;border-radius:999px;font-weight:600}
   .panel{display:flex;gap:12px;flex-wrap:wrap}
@@ -74,9 +75,10 @@
       </div>
     </div>
 
-    <div class="card" style="width:220px">
+    <div class="card" style="width:240px">
       <div>
-        <div class="small">Po žrebu (manager):</div>
+        <div class="small">Manager orodja:</div>
+        <button id="btnMassReserve" style="margin-top:6px;display:none">Množična rezervacija</button>
         <button id="btnReset" class="danger" style="display:none;margin-top:6px">PONASTAVI</button>
       </div>
     </div>
@@ -142,58 +144,51 @@
 </div>
 
 <script>
-/* KONFIG */
-const EMPLOYEES = {
-  "000": { name: "Jaša Petrinjak", role: "manager" },
-  "142": { name: "Tinkara Jelen", role: "employee" }
-};
-const STORAGE_KEYS = {
-  reservations: "jackpot_reservations_v2",
-  customers: "jackpot_customers_v2",
-  lastDraw: "jackpot_lastdraw_v2"
-};
+const EMPLOYEES={"000":{name:"Jaša Petrinjak",role:"manager"},"142":{name:"Tinkara Jelen",role:"employee"}};
+const STORAGE_KEYS={reservations:"jackpot_reservations_v2",customers:"jackpot_customers_v2",lastDraw:"jackpot_lastdraw_v2"};
+let currentUser=null;
+let reservations=loadJSON(STORAGE_KEYS.reservations,{});
+let customers=loadJSON(STORAGE_KEYS.customers,[]);
+let lastDraw=loadJSON(STORAGE_KEYS.lastDraw,null);
 
-let currentUser = null;
-let reservations = loadJSON(STORAGE_KEYS.reservations, {});
-let customers = loadJSON(STORAGE_KEYS.customers, []);
-let lastDraw = loadJSON(STORAGE_KEYS.lastDraw, null);
+const gridEl=document.getElementById("grid");
+const reservedCountEl=document.getElementById("reservedCount");
+const customersList=document.getElementById("customersList");
+const searchCustomer=document.getElementById("searchCustomer");
+const loggedName=document.getElementById("loggedName");
+const btnLogin=document.getElementById("btnLogin");
+const btnLogout=document.getElementById("btnLogout");
+const btnDraw=document.getElementById("btnDraw");
+const numWinners=document.getElementById("numWinners");
+const afterDraw=document.getElementById("afterDraw");
+const winnersList=document.getElementById("winnersList");
+const resultsTable=document.getElementById("resultsTable");
+const reservationsTable=document.getElementById("reservationsTable");
+const btnReset=document.getElementById("btnReset");
+const btnMassReserve=document.getElementById("btnMassReserve");
+const modal=document.getElementById("modal");
+const modalContent=document.getElementById("modalContent");
+const modalOk=document.getElementById("modalOk");
+const modalCancel=document.getElementById("modalCancel");
 
-/* ELEMENTI */
-const gridEl = document.getElementById("grid");
-const reservedCountEl = document.getElementById("reservedCount");
-const customersList = document.getElementById("customersList");
-const searchCustomer = document.getElementById("searchCustomer");
-const loggedName = document.getElementById("loggedName");
-const btnLogin = document.getElementById("btnLogin");
-const btnLogout = document.getElementById("btnLogout");
-const btnDraw = document.getElementById("btnDraw");
-const numWinners = document.getElementById("numWinners");
-const afterDraw = document.getElementById("afterDraw");
-const winnersList = document.getElementById("winnersList");
-const resultsTable = document.getElementById("resultsTable");
-const reservationsTable = document.getElementById("reservationsTable");
-const btnReset = document.getElementById("btnReset");
-const modal = document.getElementById("modal");
-const modalContent = document.getElementById("modalContent");
-const modalOk = document.getElementById("modalOk");
-const modalCancel = document.getElementById("modalCancel");
+let multiReserveMode=false;
+let multiReserveName="";
+let selectedNumbers=[];
 
-/* INIT */
-renderGrid(); refreshUI(); renderCustomersDatalist(); renderReservationsTable(); if(lastDraw) renderDrawResults(lastDraw);
+renderGrid();refreshUI();renderCustomersDatalist();renderReservationsTable();if(lastDraw)renderDrawResults(lastDraw);
 
-/* LOGIN */
-btnLogin.onclick = ()=>showLoginModal();
-btnLogout.onclick = ()=>{currentUser=null;refreshUI();};
+btnLogin.onclick=()=>showLoginModal();
+btnLogout.onclick=()=>{currentUser=null;refreshUI();};
+btnMassReserve.onclick=()=>startMassReserve();
 
 function showLoginModal(){
-  openModal(`<h3>Prijava</h3><div class="small">Vnesi kodo:</div><input id="pinInput" class="input" style="width:100%;margin-top:8px"/>`, "Prijavi", ()=>{
+  openModal(`<h3>Prijava</h3><div class="small">Vnesi kodo:</div><input id="pinInput" class="input" style="width:100%;margin-top:8px"/>`,"Prijavi",()=>{
     const code=document.getElementById("pinInput").value.trim();
     if(EMPLOYEES[code]){currentUser={code,...EMPLOYEES[code]};refreshUI();}else alert("Napačna koda");
   });
 }
 
-/* MODAL */
-function openModal(html, okText, onOk){
+function openModal(html,okText,onOk){
   modalContent.innerHTML=html;
   modal.style.display="flex";
   modalOk.textContent=okText||"V redu";
@@ -210,17 +205,29 @@ function renderGrid(){
     cell.textContent=i;
     if(reservations[i]) cell.classList.add("reserved");
     if(lastDraw && lastDraw.winners.includes(i)) cell.classList.add("winner");
-    cell.onclick=()=>onCellClick(i);
+    cell.onclick=()=>onCellClick(i,cell);
     gridEl.appendChild(cell);
   }
   updateReservedCount();
 }
 
-function onCellClick(num){
+function onCellClick(num,cell){
+  if(multiReserveMode){
+    if(reservations[num])return;
+    if(selectedNumbers.includes(num)){
+      selectedNumbers=selectedNumbers.filter(n=>n!==num);
+      cell.classList.remove("multi-select");
+    }else{
+      selectedNumbers.push(num);
+      cell.classList.add("multi-select");
+    }
+    return;
+  }
+
   if(!currentUser){alert("Rezervacija ni mogoča brez prijave!");return;}
   if(reservations[num]){
     const r=reservations[num];
-    openModal(`<h3>Št. ${num} je rezervirana</h3><div>Stranka: <strong>${r.name}</strong></div>`,`OK`);
+    openModal(`<h3>Št. ${num} je rezervirana</h3><div>Stranka: <strong>${r.name}</strong></div>`,"OK");
     return;
   }
   const prefill=(searchCustomer.value||"").trim();
@@ -234,88 +241,53 @@ function onCellClick(num){
   });
 }
 
-/* ŽREB */
-btnDraw.onclick=()=>{
-  if(!currentUser) return showManagerApprove(()=>performDraw());
-  if(currentUser.role!=="manager") return showManagerApprove(()=>performDraw());
-  performDraw();
-};
-btnReset.onclick=()=>{
-  if(!currentUser || currentUser.role!=="manager"){alert("Samo manager lahko ponastavi.");return;}
-  if(!confirm("Res želite ponastaviti igro?"))return;
-  reservations={};saveJSON(STORAGE_KEYS.reservations,reservations);
-  lastDraw=null;saveJSON(STORAGE_KEYS.lastDraw,null);
-  renderGrid();renderReservationsTable();afterDraw.style.display="none";
-  alert("Igra ponastavljena.");
-};
-
-/* ŽREB FUNKCIJE */
-function performDraw(){
-  const n=parseInt(numWinners.value)||5;
-  const winners=randomUnique(n,1,100);
-  lastDraw={winners,timestamp:Date.now()};
-  saveJSON(STORAGE_KEYS.lastDraw,lastDraw);
-  renderDrawResults(lastDraw);
-  btnReset.style.display="inline-block";
-}
-
-function renderDrawResults(draw){
-  afterDraw.style.display="block";
-  winnersList.innerHTML="";
-  draw.winners.forEach(w=>{
-    const el=document.createElement("div");
-    el.className="badge";el.style.background="#fff9db";el.style.color="#8a5a00";el.textContent=w;
-    winnersList.appendChild(el);
-  });
-
-  // združi po stranki
-  const byCustomer={};
-  for(const [numStr,data] of Object.entries(reservations)){
-    const num=parseInt(numStr);
-    if(!byCustomer[data.name])byCustomer[data.name]={reserved:[],won:[]};
-    byCustomer[data.name].reserved.push(num);
-    if(draw.winners.includes(num))byCustomer[data.name].won.push(num);
-  }
-
-  resultsTable.innerHTML="";
-  const names=Object.keys(byCustomer).sort();
-  if(names.length===0){resultsTable.innerHTML=`<tr><td colspan="5" class="center muted">Ni rezervacij</td></tr>`;return;}
-  names.forEach(name=>{
-    const d=byCustomer[name];
-    const pct=(d.reserved.length?Math.round((d.won.length/d.reserved.length)*100):0);
-    const eligible=(d.won.length/d.reserved.length)>1/3;
-    const tr=document.createElement("tr");
-    tr.innerHTML=`<td>${name}</td><td>${d.reserved.sort((a,b)=>a-b).join(", ")}</td><td>${d.won.sort((a,b)=>a-b).join(", ")||"-"}</td><td>${pct}%</td><td>${eligible?"🏆 Stranki pripada nagrada!":""}</td>`;
-    resultsTable.appendChild(tr);
+/* MNOŽIČNA REZERVACIJA */
+function startMassReserve(){
+  if(!currentUser||currentUser.role!=="manager"){alert("Samo manager lahko izvaja množično rezervacijo.");return;}
+  openModal(`<h3>Množična rezervacija</h3><div class="small">Ime stranke:</div><input id="massName" class="input" placeholder="ime in priimek" style="width:100%;margin-top:8px"/>`,"Naprej",()=>{
+    const name=document.getElementById("massName").value.trim();
+    if(!name){alert("Vnesi ime!");return;}
+    multiReserveMode=true;
+    multiReserveName=name;
+    selectedNumbers=[];
+    alert("Zdaj klikaj na proste številke, ki jih želiš rezervirati za: "+name+". Ko končaš, pritisni še enkrat na 'Množična rezervacija' za potrditev.");
+    btnMassReserve.textContent="✅ Potrdi množično rezervacijo";
+    btnMassReserve.onclick=()=>finishMassReserve();
   });
 }
 
-/* POMOŽNE FUNKCIJE */
-function randomUnique(n,min,max){
-  const arr=[];for(let i=min;i<=max;i++)arr.push(i);
-  for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}
-  return arr.slice(0,n);
+function finishMassReserve(){
+  if(selectedNumbers.length===0){alert("Nisi izbral nobene številke.");return;}
+  selectedNumbers.forEach(num=>{
+    reservations[num]={name:multiReserveName,ts:Date.now()};
+  });
+  if(!customers.includes(multiReserveName)){customers.push(multiReserveName);saveJSON(STORAGE_KEYS.customers,customers);}
+  saveJSON(STORAGE_KEYS.reservations,reservations);
+  multiReserveMode=false;
+  selectedNumbers=[];
+  btnMassReserve.textContent="Množična rezervacija";
+  btnMassReserve.onclick=()=>startMassReserve();
+  renderGrid();renderReservationsTable();updateReservedCount();
+  alert("Množična rezervacija za '"+multiReserveName+"' uspešno izvedena.");
 }
+
+/* ŽREB + ostalo */
+btnDraw.onclick=()=>{if(!currentUser)return showManagerApprove(()=>performDraw());if(currentUser.role!=="manager")return showManagerApprove(()=>performDraw());performDraw();};
+btnReset.onclick=()=>{if(!currentUser||currentUser.role!=="manager"){alert("Samo manager lahko ponastavi.");return;}if(!confirm("Res želite ponastaviti igro?"))return;reservations={};saveJSON(STORAGE_KEYS.reservations,reservations);lastDraw=null;saveJSON(STORAGE_KEYS.lastDraw,null);renderGrid();renderReservationsTable();afterDraw.style.display="none";alert("Igra ponastavljena.");};
+
+function performDraw(){const n=parseInt(numWinners.value)||5;const winners=randomUnique(n,1,100);lastDraw={winners,timestamp:Date.now()};saveJSON(STORAGE_KEYS.lastDraw,lastDraw);renderDrawResults(lastDraw);btnReset.style.display="inline-block";}
+function renderDrawResults(draw){afterDraw.style.display="block";winnersList.innerHTML="";draw.winners.forEach(w=>{const el=document.createElement("div");el.className="badge";el.style.background="#fff9db";el.style.color="#8a5a00";el.textContent=w;winnersList.appendChild(el);});const byCustomer={};for(const [numStr,data]of Object.entries(reservations)){const num=parseInt(numStr);if(!byCustomer[data.name])byCustomer[data.name]={reserved:[],won:[]};byCustomer[data.name].reserved.push(num);if(draw.winners.includes(num))byCustomer[data.name].won.push(num);}resultsTable.innerHTML="";const names=Object.keys(byCustomer).sort();if(names.length===0){resultsTable.innerHTML=`<tr><td colspan="5" class="center muted">Ni rezervacij</td></tr>`;return;}names.forEach(name=>{const d=byCustomer[name];const pct=(d.reserved.length?Math.round((d.won.length/d.reserved.length)*100):0);const eligible=(d.won.length/d.reserved.length)>1/3;const tr=document.createElement("tr");tr.innerHTML=`<td>${name}</td><td>${d.reserved.sort((a,b)=>a-b).join(", ")}</td><td>${d.won.sort((a,b)=>a-b).join(", ")||"-"}</td><td>${pct}%</td><td>${eligible?"🎉 Nagrada za "+d.won.length+" št.":"-"}</td>`;resultsTable.appendChild(tr);});renderGrid();}
+
+function renderReservationsTable(){const tbody=reservationsTable;tbody.innerHTML="";const entries=Object.entries(reservations).sort((a,b)=>a[0]-b[0]);entries.forEach(([num,data])=>{const tr=document.createElement("tr");const d=new Date(data.ts).toLocaleString("sl-SI");tr.innerHTML=`<td>${num}</td><td>${data.name}</td><td>${d}</td>`;tbody.appendChild(tr);});if(entries.length===0)tbody.innerHTML=`<tr><td colspan="3" class="center muted">Ni rezervacij</td></tr>`;}
+function renderCustomersDatalist(){customersList.innerHTML="";customers.forEach(c=>{const o=document.createElement("option");o.value=c;customersList.appendChild(o);});}
+function refreshUI(){loggedName.textContent=currentUser?currentUser.name+" ("+currentUser.role+")":"niste prijavljeni";btnLogin.style.display=currentUser?"none":"inline-block";btnLogout.style.display=currentUser?"inline-block":"none";btnReset.style.display=(currentUser&&currentUser.role==="manager")?"inline-block":"none";btnMassReserve.style.display=(currentUser&&currentUser.role==="manager")?"inline-block":"none";}
+function updateReservedCount(){reservedCountEl.textContent="Rezerviranih: "+Object.keys(reservations).length;}
+function showManagerApprove(cb){openModal(`<h3>Dovoljenje managerja</h3><div class="small">Vnesi managersko kodo:</div><input id="mgrPin" class="input" style="width:100%;margin-top:8px"/>`,"Potrdi",()=>{const code=document.getElementById("mgrPin").value.trim();if(EMPLOYEES[code]?.role==="manager"){cb();}else alert("Dostop zavrnjen");});}
+
+/* Helpers */
 function saveJSON(k,v){localStorage.setItem(k,JSON.stringify(v));}
-function loadJSON(k,f){try{return JSON.parse(localStorage.getItem(k))||f;}catch{return f;}}
-function updateReservedCount(){reservedCountEl.textContent=`Rezerviranih: ${Object.keys(reservations).length}`;}
-function renderReservationsTable(){
-  const arr=Object.entries(reservations).map(([num,d])=>({num:parseInt(num),...d})).sort((a,b)=>a.num-b.num);
-  reservationsTable.innerHTML=arr.length?arr.map(r=>`<tr><td>${r.num}</td><td>${r.name}</td><td>${new Date(r.ts).toLocaleString()}</td></tr>`).join(""):`<tr><td colspan="3" class="center muted">Brez rezervacij</td></tr>`;
-}
-function renderCustomersDatalist(){customersList.innerHTML=customers.map(c=>`<option value="${c}">`).join("");}
-function refreshUI(){
-  loggedName.innerHTML=currentUser?`${currentUser.name} (${currentUser.role})`:"<strong>niste prijavljeni</strong>";
-  btnLogin.style.display=currentUser?"none":"inline-block";
-  btnLogout.style.display=currentUser?"inline-block":"none";
-  btnReset.style.display=(currentUser&&currentUser.role==="manager"&&lastDraw)?"inline-block":"none";
-}
-function showManagerApprove(cb){
-  openModal(`<h3>Manager potrditev</h3><div class="small">Vnesi kodo:</div><input id="mgrPin" class="input" style="width:100%;margin-top:8px"/>`,"Potrdi",()=>{
-    const code=document.getElementById("mgrPin").value.trim();
-    if(EMPLOYEES[code]?.role==="manager"){cb();}else alert("Dostop zavrnjen");
-  });
-}
+function loadJSON(k,def){try{return JSON.parse(localStorage.getItem(k))||def;}catch{return def;}}
+function randomUnique(count,min,max){const arr=[];while(arr.length<count){const n=Math.floor(Math.random()*(max-min+1))+min;if(!arr.includes(n))arr.push(n);}return arr;}
 </script>
 </body>
 </html>
