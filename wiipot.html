@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="sl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>JACKPOT - WIIPOT</title>
+<style>
+  :root{--bg:#f5f7fb;--card:#fff;--accent:#2b6cb0;--danger:#e53e3e;--muted:#666}
+  body{font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;margin:0;background:var(--bg);color:#111}
+  header{background:linear-gradient(90deg,#1e90ff22,#ffffff);padding:18px 20px;border-bottom:1px solid #e6eefc;display:flex;align-items:center;justify-content:space-between}
+  header h1{margin:0;font-size:20px}
+  .small{font-size:13px;color:var(--muted)}
+  .container{max-width:1100px;margin:20px auto;padding:12px}
+  .top-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  .card{background:var(--card);border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(20,40,80,0.06)}
+  .login-info{display:flex;gap:10px;align-items:center}
+  button{background:var(--accent);color:white;border:0;padding:8px 12px;border-radius:8px;cursor:pointer}
+  button.ghost{background:transparent;color:var(--accent);border:1px solid #cfe3fb}
+  button.danger{background:var(--danger)}
+  .grid{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;padding:8px}
+  .cell{background:#f7fbff;border:1px dashed #dbeffd;padding:10px;text-align:center;border-radius:6px;cursor:pointer;user-select:none}
+  .cell.reserved{background:#ffeccf;border:1px solid #ffd689}
+  .cell.winner{box-shadow:0 0 0 3px rgba(255,215,0,0.12) inset}
+  .controls{display:flex;gap:8px;align-items:center}
+  .badge{background:#eef6ff;color:#0b3a66;padding:6px 8px;border-radius:999px;font-weight:600}
+  .panel{display:flex;gap:12px;flex-wrap:wrap}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:8px;border-bottom:1px solid #eef2fb;text-align:left}
+  th{background:#fbfdff;font-weight:700}
+  .muted{color:var(--muted);font-size:13px}
+  .center{text-align:center}
+  .input, input, select{padding:8px;border-radius:6px;border:1px solid #dfe9fb}
+  .footer-note{font-size:13px;color:var(--muted);margin-top:8px}
+  @media(max-width:800px){.grid{grid-template-columns:repeat(5,1fr)}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>JACKPOT — WIIPOT</h1>
+    <div class="small">Sistem za rezervacijo števil in žrebanje</div>
+  </div>
+  <div id="userArea" class="login-info">
+    <!-- populated by JS -->
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="top-row">
+    <div class="card" style="flex:1">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div class="small">Zaposleni:</div>
+          <div id="loggedName"><strong>niste prijavljeni</strong></div>
+        </div>
+
+        <div class="controls">
+          <button id="btnLogin" class="">Prijava</button>
+          <button id="btnLogout" class="ghost" style="display:none">Odjava</button>
+        </div>
+      </div>
+      <div class="footer-note">Dovoljene kode: <code>000</code> = Jaša Petrinjak (manager), <code>142</code> = Tinkara Jelen</div>
+    </div>
+
+    <div class="card" style="width:320px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div class="small">Žrebanje (manager)</div>
+          <div class="muted">Število izžrebanih števil:</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="numWinners" type="number" class="input" value="5" min="1" max="100" style="width:80px"/>
+          <button id="btnDraw">ŽREB</button>
+        </div>
+      </div>
+      <div class="footer-note">Če uporabnik ni manager, bo zahtevan managerjev PIN za potrdi žrebanje.</div>
+    </div>
+
+    <div class="card" style="width:220px;display:flex;flex-direction:column;justify-content:space-between">
+      <div>
+        <div class="small">Po žrebu (manager):</div>
+        <div style="margin-top:6px">
+          <button id="btnReset" class="danger" style="background:var(--danger);display:none">PONASTAVI (po žrebu)</button>
+        </div>
+      </div>
+      <div class="footer-note">PONASTAVI zbriše vse rezervacije in pripravi novo igro.</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <strong>Polje števil (1–100)</strong>
+        <div class="muted">Klikni na število, da ga rezerviraš za stranko.</div>
+      </div>
+
+      <div class="panel">
+        <div class="small">Iskanje stranke:</div>
+        <input id="searchCustomer" list="customersList" placeholder="ime in priimek" class="input" style="min-width:220px"/>
+        <datalist id="customersList"></datalist>
+        <div class="badge" id="reservedCount">Rezerviranih: 0</div>
+      </div>
+    </div>
+
+    <hr style="margin:12px 0;border:none;border-top:1px solid #f0f6ff"/>
+
+    <div id="grid" class="grid" aria-label="Polje 1 do 100 (klik na celico)"></div>
+  </div>
+
+  <div class="card" id="afterDraw" style="display:none">
+    <h3>Rezultati žreba</h3>
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
+      <div class="small">Izžrebane številke:</div>
+      <div id="winnersList" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+    </div>
+
+    <div style="margin-top:8px;overflow:auto">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:90px">Št.</th>
+            <th>Stranka</th>
+            <th>Rezervirano</th>
+            <th>Je nagrada?</th>
+            <th>Odstotek izžrebanih rezervacij</th>
+            <th>Opombe</th>
+          </tr>
+        </thead>
+        <tbody id="resultsTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="height:20px"></div>
+
+  <div class="card">
+    <h3>Seznam rezervacij</h3>
+    <div style="overflow:auto">
+      <table>
+        <thead>
+          <tr><th style="width:90px">Št.</th><th>Ime in priimek</th><th>Število</th><th>Kdaj</th></tr>
+        </thead>
+        <tbody id="reservationsTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modali -->
+<div id="modal" style="position:fixed;left:0;top:0;width:100%;height:100%;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.4);z-index:40">
+  <div style="width:420px;max-width:94%;background:white;border-radius:10px;padding:16px" class="card">
+    <div id="modalContent"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button id="modalCancel" class="ghost">Prekliči</button>
+      <button id="modalOk">V redu</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---- Konfiguracija ---- */
+const EMPLOYEES = {
+  "000": { name: "Jaša Petrinjak", role: "manager" },
+  "142": { name: "Tinkara Jelen", role: "employee" }
+};
+const STORAGE_KEYS = {
+  reservations: "jackpot_reservations_v1", // map number -> { name, timestamp }
+  customers: "jackpot_customers_v1",
+  lastDraw: "jackpot_lastdraw_v1"
+};
+
+/* ---- Stanje ---- */
+let currentUser = null; // {code, name, role}
+let reservations = loadJSON(STORAGE_KEYS.reservations, {}); // { "1": {name, ts}, ...}
+let customers = loadJSON(STORAGE_KEYS.customers, []); // ["Ime Priimek", ...]
+let lastDraw = loadJSON(STORAGE_KEYS.lastDraw, null); // { winners: [...], timestamp }
+
+/* ---- UI refs ---- */
+const gridEl = document.getElementById("grid");
+const reservedCountEl = document.getElementById("reservedCount");
+const customersList = document.getElementById("customersList");
+const searchCustomer = document.getElementById("searchCustomer");
+const loggedName = document.getElementById("loggedName");
+const userArea = document.getElementById("userArea");
+const btnLogin = document.getElementById("btnLogin");
+const btnLogout = document.getElementById("btnLogout");
+const btnDraw = document.getElementById("btnDraw");
+const numWinners = document.getElementById("numWinners");
+const afterDraw = document.getElementById("afterDraw");
+const winnersList = document.getElementById("winnersList");
+const resultsTable = document.getElementById("resultsTable");
+const reservationsTable = document.getElementById("reservationsTable");
+const btnReset = document.getElementById("btnReset");
+
+const modal = document.getElementById("modal");
+const modalContent = document.getElementById("modalContent");
+const modalOk = document.getElementById("modalOk");
+const modalCancel = document.getElementById("modalCancel");
+
+/* ---- Init ---- */
+renderGrid();
+refreshUI();
+renderReservationsTable();
+renderCustomersDatalist();
+if(lastDraw) renderDrawResults(lastDraw);
+
+/* ---- Event handlers ---- */
+btnLogin.addEventListener("click", () => showLoginModal());
+btnLogout.addEventListener("click", () => { currentUser = null; refreshUI(); });
+
+btnDraw.addEventListener("click", () => {
+  if(!currentUser){
+    // require manager approval
+    showManagerApprove(() => performDraw());
+  } else if(currentUser.role !== "manager"){
+    // require manager approval
+    showManagerApprove(() => performDraw());
+  } else {
+    performDraw();
+  }
+});
+
+btnReset.addEventListener("click", () => {
+  if(!currentUser || currentUser.role !== "manager"){
+    alert("PONASTAVI lahko sproži samo manager.");
+    return;
+  }
+  if(!confirm("Res želite PONASTAVITI igro in izbrisati vse rezervacije? To je nepovratno.")) return;
+  reservations = {};
+  saveJSON(STORAGE_KEYS.reservations, reservations);
+  lastDraw = null;
+  saveJSON(STORAGE_KEYS.lastDraw, null);
+  renderGrid();
+  refreshUI();
+  renderReservationsTable();
+  afterDraw.style.display = "none";
+  alert("Sistem je ponastavljen. Nova igra pripravljena.");
+});
+
+/* Modal helpers */
+function openModal(html, okText = "V redu", onOk) {
+  modalContent.innerHTML = html;
+  modal.style.display = "flex";
+  modalOk.textContent = okText;
+  return new Promise((resolve) => {
+    modalOk.onclick = () => { modal.style.display = "none"; onOk && onOk(); resolve(true); };
+    modalCancel.onclick = () => { modal.style.display = "none"; resolve(false); };
+  });
+}
+
+function showLoginModal() {
+  const html = `
+    <h3>Prijava zaposlenega</h3>
+    <div style="margin-top:8px">
+      <div class="small">Vnesi svojo kodo (PIN):</div>
+      <input id="pinInput" class="input" style="width:100%;margin-top:8px" />
+    </div>`;
+  openModal(html, "Prijavi", () => {
+    const code = document.getElementById("pinInput").value.trim();
+    if(EMPLOYEES[code]) {
+      currentUser = { code, ...EMPLOYEES[code] };
+      refreshUI();
+    } else {
+      alert("Neveljavna koda.");
+    }
+  });
+}
+
+function showManagerApprove(onApproved) {
+  const html = `
+    <h3>Manager potrditev</h3>
+    <div class="small" style="margin-bottom:6px">Za izvedbo te akcije je potrebna managerjeva koda:</div>
+    <input id="mgrPin" class="input" placeholder="manager PIN (npr. 000)" />`;
+  openModal(html, "Potrdi", () => {
+    const pin = document.getElementById("mgrPin").value.trim();
+    if(EMPLOYEES[pin] && EMPLOYEES[pin].role === "manager") {
+      // optionally set currentUser to that manager for this session? We'll NOT switch current user, only allow action.
+      onApproved && onApproved();
+    } else {
+      alert("Neveljaven manager PIN.");
+    }
+  });
+}
+
+/* Grid & reservation logic */
+function renderGrid(){
+  gridEl.innerHTML = "";
+  for(let i=1;i<=100;i++){
+    const cell = document.createElement("div");
+    cell.className = "cell";
+    cell.dataset.num = i;
+    cell.textContent = i;
+    if(reservations[i]) {
+      cell.classList.add("reserved");
+      cell.title = reservations[i].name;
+    }
+    // if there is lastDraw and winners include this number -> mark
+    if(lastDraw && lastDraw.winners && lastDraw.winners.includes(i)) {
+      cell.classList.add("winner");
+    }
+    cell.addEventListener("click", () => onCellClick(i));
+    gridEl.appendChild(cell);
+  }
+  updateReservedCount();
+}
+
+function onCellClick(num){
+  // if already reserved, show info and option to unreserve only to the user who reserved? User didn't ask for per-employee ownership, so allow manager to override.
+  if(reservations[num]) {
+    const r = reservations[num];
+    const html = `<h3>Število ${num} je rezervirano</h3>
+                  <div><strong>Stranka:</strong> ${r.name}</div>
+                  <div class="small" style="margin-top:6px">Rezervirano: ${new Date(r.ts).toLocaleString()}</div>
+                  <div class="small" style="margin-top:8px">Želiš to rezervacijo odstraniti (manager)?</div>
+                  <input id="confirmRemove" style="display:none" />`;
+    openModal(html, "Odstrani", () => {
+      // require manager to remove
+      showManagerApprove(() => {
+        delete reservations[num];
+        saveJSON(STORAGE_KEYS.reservations, reservations);
+        renderGrid();
+        refreshUI();
+        renderReservationsTable();
+      });
+    });
+    return;
+  }
+
+  // choose customer: prefill from searchCustomer if present
+  const prefill = (searchCustomer.value || "").trim();
+  const html = `<h3>Rezervacija števila ${num}</h3>
+    <div class="small">Vnesi ime in priimek stranke:</div>
+    <input id="custName" class="input" style="width:100%;margin-top:8px" value="${escapeHtml(prefill)}" placeholder="Janez Novak" />
+    <div class="small" style="margin-top:8px">Če je stranka že v sistemu, jo izberi v polju za iskanje (avtomatsko dopolnjevanje).</div>`;
+  openModal(html, "Rezerviraj", () => {
+    const name = document.getElementById("custName").value.trim();
+    if(!name) { alert("Vnesi ime in priimek stranke."); return; }
+    // save reservation
+    reservations[num] = { name, ts: Date.now() };
+    saveJSON(STORAGE_KEYS.reservations, reservations);
+    // add to customers list if new
+    if(!customers.includes(name)) {
+      customers.push(name);
+      saveJSON(STORAGE_KEYS.customers, customers);
+      renderCustomersDatalist();
+    }
+    renderGrid();
+    refreshUI();
+    renderReservationsTable();
+  });
+}
+
+/* Draw logic */
+function performDraw(){
+  const n = parseInt(numWinners.value) || 5;
+  if(n < 1 || n > 100){ alert("Število izžrebanih števil mora biti med 1 in 100."); return; }
+  // random unique numbers 1..100
+  const winners = randomUnique(n, 1, 100);
+  lastDraw = { winners, timestamp: Date.now() };
+  saveJSON(STORAGE_KEYS.lastDraw, lastDraw);
+
+  // compute results per-customer
+  renderDrawResults(lastDraw);
+
+  // enable reset for manager only
+  btnReset.style.display = (currentUser && currentUser.role === "manager") ? "inline-block" : "none";
+  afterDraw.style.display = "block";
+
+  // also mark grid winners
+  renderGrid();
+}
+
+function renderDrawResults(draw){
+  winnersList.innerHTML = "";
+  draw.winners.forEach(w => {
+    const el = document.createElement("div");
+    el.className = "badge";
+    el.style.background = "#fff9db";
+    el.style.color = "#8a5a00";
+    el.textContent = w;
+    winnersList.appendChild(el);
+  });
+
+  // Build per-customer aggregation
+  const byCustomer = {}; // name -> { reservedNums: [], wonNums: [] }
+  for(const [numStr, data] of Object.entries(reservations)){
+    const num = parseInt(numStr);
+    if(!byCustomer[data.name]) byCustomer[data.name] = { reserved: [], won: [] };
+    byCustomer[data.name].reserved.push(num);
+    if(draw.winners.includes(num)) byCustomer[data.name].won.push(num);
+  }
+
+  // Build table: for each reservation (sorted by number) show row with owner and whether that number won
+  const allReservedNumbers = Object.keys(reservations).map(x => parseInt(x)).sort((a,b)=>a-b);
+  resultsTable.innerHTML = "";
+  if(allReservedNumbers.length === 0){
+    resultsTable.innerHTML = `<tr><td colspan="6" class="center muted">Ni bilo rezervacij.</td></tr>`;
+  } else {
+    // Create a map for quick name->stats
+    const stats = {};
+    for(const [name, v] of Object.entries(byCustomer)){
+      const total = v.reserved.length;
+      const won = v.won.length;
+      const pct = total===0?0: Math.round((won/total)*10000)/100; // 2 dec
+      stats[name] = { total, won, pct, eligible: (total>0 && (won/total) > (1/3)) };
+    }
+
+    // For each reserved number, show owner and indication if that number was in winners
+    for(const num of allReservedNumbers){
+      const r = reservations[num];
+      const owner = r.name;
+      const ownerStats = stats[owner];
+      const isWinner = (draw.winners.includes(num));
+      const note = ownerStats.eligible ? "Stranki pripada nagrada za vsako nagrajeno številko" : "";
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${num}</td>
+        <td>${escapeHtml(owner)}</td>
+        <td>${ownerStats.total} (ta vnos)</td>
+        <td>${isWinner ? "DA" : "NE"}</td>
+        <td>${ownerStats.pct}%</td>
+        <td class="muted">${note}</td>
+      `;
+      resultsTable.appendChild(row);
+    }
+  }
+}
+
+/* Reservations table rendering */
+function renderReservationsTable(){
+  reservationsTable.innerHTML = "";
+  const items = Object.keys(reservations).map(k => ({ num: parseInt(k), ...reservations[k] }))
+                    .sort((a,b)=>a.num-b.num);
+  if(items.length === 0){
+    reservationsTable.innerHTML = `<tr><td colspan="4" class="center muted">Brez rezervacij</td></tr>`;
+    return;
+  }
+  for(const it of items){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${it.num}</td><td>${escapeHtml(it.name)}</td><td>${it.num}</td><td>${new Date(it.ts).toLocaleString()}</td>`;
+    reservationsTable.appendChild(tr);
+  }
+}
+
+/* Helpers & persistence */
+function saveJSON(key, obj){ localStorage.setItem(key, JSON.stringify(obj)); }
+function loadJSON(key, fallback){
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(e){ return fallback; }
+}
+
+function updateReservedCount(){
+  const count = Object.keys(reservations).length;
+  reservedCountEl.textContent = `Rezerviranih: ${count}`;
+}
+
+function renderCustomersDatalist(){
+  customersList.innerHTML = "";
+  customers.forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c;
+    customersList.appendChild(opt);
+  });
+}
+
+/* UI refresh (login state etc) */
+function refreshUI(){
+  if(currentUser){
+    loggedName.innerHTML = `<strong>${currentUser.name}</strong> <span class="muted">(${currentUser.role})</span>`;
+    btnLogin.style.display = "none";
+    btnLogout.style.display = "inline-block";
+    userArea.innerHTML = `<div class="small">Prijavljen: <strong>${currentUser.name}</strong> (${currentUser.role})</div>`;
+  } else {
+    loggedName.innerHTML = `<strong>niste prijavljeni</strong>`;
+    btnLogin.style.display = "inline-block";
+    btnLogout.style.display = "none";
+    userArea.innerHTML = `<div class="small">Nihče ni prijavljen</div>`;
+  }
+  // show reset button only if manager and there was a draw
+  btnReset.style.display = (currentUser && currentUser.role === "manager" && lastDraw) ? "inline-block" : "none";
+}
+
+/* Utility functions */
+function randomUnique(count, min, max){
+  const range = [];
+  for(let i=min;i<=max;i++) range.push(i);
+  // Fisher-Yates to sample
+  for(let i=range.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [range[i], range[j]] = [range[j], range[i]];
+  }
+  return range.slice(0,count);
+}
+
+function escapeHtml(s){ return s.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;"); }
+
+/* initial rendering helpers called above */
+function renderGridPointsSimple(){ renderGrid(); }
+
+/* On load populate UI parts */
+renderGrid();
+renderReservationsTable();
+
+/* Expose for debugging (optional) */
+window._jackpot = { reservations, customers, EMPLOYEES };
+
+/* Accessibility: clicking outside modal or Esc closes */
+modal.addEventListener("click", (e) => { if(e.target === modal) modal.style.display = "none"; });
+document.addEventListener("keydown", (e) => { if(e.key === "Escape") modal.style.display = "none"; });
+
+</script>
+</body>
+</html>
