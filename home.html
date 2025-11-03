@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+    <meta charset="UTF-8">
+    <title>Manager prijava</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            font-size: 16px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Prijava Managerja</h2>
+    <div id="loginDiv">
+        <input type="password" id="codeInput" placeholder="Vnesi kodo">
+        <button onclick="login()">Prijava</button>
+    </div>
+
+    <div id="welcomeDiv" class="hidden">
+        <h2 id="welcomeMessage"></h2>
+        <button onclick="location.href='https://sites.google.com/view/wii-shop-si/wii/wii-shop'">WII Shop</button>
+        <button onclick="location.href='https://sites.google.com/view/wii-shop-si/wii/wii-pot'">WII - POT</button>
+        <button onclick="location.href='https://sites.google.com/view/wii-shop-si/wii/opravila'">WII - Opravila</button>
+    </div>
+
+    <script>
+        function login() {
+            const code = document.getElementById('codeInput').value;
+            if (code === '17426') {  // pravilna koda
+                document.getElementById('loginDiv').classList.add('hidden');
+                document.getElementById('welcomeDiv').classList.remove('hidden');
+                document.getElementById('welcomeMessage').innerText = 'Pozdravljen, Jaša Petrinjak!';
+            } else {
+                alert('Napačna koda. Poskusi ponovno.');
+            }
+        }
+    </script>
+
+</body>
+</html>
