@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="sl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>WII Opravila</title>
+<style>
+:root{
+  --cell-size:140px;
+  --thin-cell-height:36px;
+}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;margin:0;background:#f7f7f7;color:#111}
+.container{max-width:900px;margin:28px auto;padding:18px;background:#fff;border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.08)}
+h1{margin:0 0 12px 0;font-size:20px}
+label{display:block;margin:8px 0 4px;font-weight:600;font-size:13px}
+input[type="text"], input[type="password"], input[type="date"], textarea{
+  width:100%;padding:8px 10px;border:1px solid #ccc;border-radius:6px;font-size:14px;box-sizing:border-box
+}
+button.btn{padding:8px 12px;border-radius:8px;border:0;background:#1976d2;color:#fff;font-weight:600;cursor:pointer}
+button.btn:active{transform:translateY(1px)}
+.flex{display:flex;gap:12px;align-items:center}
+.center{display:flex;justify-content:center;align-items:center}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
+.header-cell{
+  height:var(--thin-cell-height);
+  border:1px solid #bbb;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:700;
+  font-size:14px;
+  background:transparent;
+}
+.status-cell{
+  width:100%;
+  height:var(--cell-size);
+  border-radius:8px;
+  border:3px solid #ddd;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  box-sizing:border-box;
+  transition:transform .06s ease;
+}
+.status-cell:active{transform:translateY(1px)}
+.status-cell .label{text-align:center;font-weight:700;}
+.modal-backdrop{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:50}
+.modal{width:720px;max-width:94%;background:#fff;border-radius:10px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.25);border:1px solid #eee}
+.modal h2{margin:0 0 8px 0;font-size:18px}
+.tasks-list{display:grid;grid-template-columns:1fr 1fr;gap:6px 20px;margin:12px 0;max-height:320px;overflow-y:auto;}
+.task-row{padding:6px 0;cursor:pointer;font-weight:400}
+.task-row.bold{font-weight:700}
+.controls{display:flex;gap:8px;align-items:center;margin-top:12px}
+.color-btn{padding:6px 12px;border-radius:6px;border:2px solid transparent;cursor:pointer;font-weight:700}
+.color-btn.selected{outline:3px solid #000;outline-offset:2px}
+.color-btn.green{background:#27ae60;color:#fff}
+.color-btn.orange{background:#f39c12;color:#fff}
+.color-btn.red{background:#c62828;color:#fff}
+.notes{margin-top:12px}
+textarea.notes{width:100%;height:88px;resize:vertical;padding:10px;border-radius:8px;border:1px solid #ddd}
+.row-between{display:flex;justify-content:space-between;align-items:center}
+.footer-actions{text-align:right;margin-top:12px}
+.btn-ghost{background:transparent;border:1px solid #ccc;padding:8px 10px;border-radius:8px;cursor:pointer}
+.error{color:#c0392b;margin-top:8px}
+.small-muted{font-size:13px;color:#666}
+@media (max-width:520px){
+  .status-cell{height:120px}
+  .container{padding:12px}
+}
+</style>
+</head>
+<body>
+<div class="container" id="app">
+  <h1>WII Opravila — sistem</h1>
+  <!-- LOGIN -->
+  <div id="loginScreen">
+    <label for="username">Uporabniško ime</label>
+    <input id="username" type="text" placeholder="Vnesite uporabniško ime" autocomplete="username" />
+    <label for="password">Geslo</label>
+    <input id="password" type="password" placeholder="Vnesite geslo" autocomplete="current-password" />
+    <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+      <button id="loginBtn" class="btn">Prijava</button>
+    </div>
+    <div id="loginError" class="error" style="display:none"></div>
+  </div>
+  <!-- MAIN APP -->
+  <div id="mainApp" style="display:none">
+    <div class="row-between" style="margin:12px 0">
+      <div>
+        <label for="selectedDate">Izberi datum</label>
+        <input id="selectedDate" type="date" />
+      </div>
+      <button id="logoutBtn" class="btn" style="background:#d32f2f">Odjava</button>
+    </div>
+    <div class="grid">
+      <div class="header-cell" id="header-anze">ANŽE</div>
+      <div class="header-cell" id="header-tinkara">TINKARA</div>
+      <div id="cell-ANZE" class="status-cell" style="background:#ffcccb" data-name="ANZE"><div class="label">—</div></div>
+      <div id="cell-TINKARA" class="status-cell" style="background:#ffcccb" data-name="TINKARA"><div class="label">—</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div id="modalBackdrop" class="modal-backdrop">
+  <div class="modal">
+    <div class="row-between">
+      <h2 id="modalTitle">PREGLED</h2>
+      <button id="closeModal" class="btn-ghost">Zapri</button>
+    </div>
+    <div id="tasksList" class="tasks-list"></div>
+    <div class="controls">
+      <div class="color-btn green" data-color="green">ZELENO</div>
+      <div class="color-btn orange" data-color="orange">ORANŽNO</div>
+      <div class="color-btn red" data-color="red">RDEČE</div>
+    </div>
+    <div class="notes">
+      <label for="notesArea">Opombe</label>
+      <textarea id="notesArea" class="notes"></textarea>
+    </div>
+    <div class="footer-actions">
+      <button id="btnDelete" class="btn-ghost">Izbriši</button>
+      <button id="btnSave" class="btn">Shrani</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const VALID_USER='jp09', VALID_PASS='Gorenje1';
+const loginScreen=document.getElementById('loginScreen');
+const mainApp=document.getElementById('mainApp');
+const loginBtn=document.getElementById('loginBtn');
+const logoutBtn=document.getElementById('logoutBtn');
+const usernameInput=document.getElementById('username');
+const passwordInput=document.getElementById('password');
+const loginError=document.getElementById('loginError');
+
+const selectedDateInput=document.getElementById('selectedDate');
+const cellANZE=document.getElementById('cell-ANZE');
+const cellTINKARA=document.getElementById('cell-TINKARA');
+
+const modalBackdrop=document.getElementById('modalBackdrop');
+const modalTitle=document.getElementById('modalTitle');
+const tasksList=document.getElementById('tasksList');
+const btnGreen=document.querySelector('.color-btn.green');
+const btnOrange=document.querySelector('.color-btn.orange');
+const btnRed=document.querySelector('.color-btn.red');
+const notesArea=document.getElementById('notesArea');
+const btnSave=document.getElementById('btnSave');
+const btnDelete=document.getElementById('btnDelete');
+const closeModal=document.getElementById('closeModal');
+
+const tasksFor={ 
+  "ANZE":["Stuširan (v pižami)","Pospravljena soba","Pripravljena torba","Večerja","TROBENTA","Umiti zobje","Obnašanje","Miza","UREJENOST","Tablica"],
+  "TINKARA":["Stuširana (v pižami)","Pospravljena soba","Pripravljena torba","Večerja","KLARINET","Umiti zobje","Obnašanje","Miza","Tablica"]
+};
+
+let currentName=null, currentDate=null, selectedColor=null, currentTaskStates={};
+
+function storageKey(date,name){return`wii_${date}_${name}`;}
+function saveData(date,name,data){localStorage.setItem(storageKey(date,name),JSON.stringify(data));}
+function loadData(date,name){let raw=localStorage.getItem(storageKey(date,name)); return raw?JSON.parse(raw):null;}
+function deleteData(date,name){localStorage.removeItem(storageKey(date,name));}
+
+function setCellColor(cellEl,color,text){cellEl.style.background=color; cellEl.querySelector('.label').textContent=text;}
+
+loginBtn.addEventListener('click',()=>{
+  const user=usernameInput.value.trim(), pass=passwordInput.value;
+  if(user===VALID_USER && pass===VALID_PASS){
+    loginError.style.display='none';
+    loginScreen.style.display='none';
+    mainApp.style.display='block';
+    let today=new Date(),yyyy=today.getFullYear(),mm=String(today.getMonth()+1).padStart(2,'0'),dd=String(today.getDate()).padStart(2,'0');
+    selectedDateInput.value=`${yyyy}-${mm}-${dd}`;
+    updateCellsForDate(selectedDateInput.value);
+  } else {
+    loginError.style.display='block'; loginError.textContent='Neveljaven uporabnik ali geslo.';
+  }
+});
+
+logoutBtn.addEventListener('click',()=>{
+  usernameInput.value=''; passwordInput.value='';
+  mainApp.style.display='none'; loginScreen.style.display='block';
+});
+
+selectedDateInput.addEventListener('change',()=>{updateCellsForDate(selectedDateInput.value);});
+
+function updateCellsForDate(date){
+  currentDate=date;
+  ['ANZE','TINKARA'].forEach(name=>{
+    const data=loadData(date,name);
+    const cell=document.getElementById(`cell-${name}`);
+    if(data) setCellColor(cell,'#b9f6ca',date); 
+    else setCellColor(cell,'#ffcccb','—');
+  });
+}
+
+[cellANZE,cellTINKARA].forEach(cell=>{
+  cell.addEventListener('click',()=>{
+    if(!selectedDateInput.value){alert('Najprej izberite datum.'); return;}
+    currentName=cell.dataset.name; currentDate=selectedDateInput.value;
+    openModalFor(currentName,currentDate);
+  });
+});
+
+function openModalFor(name,date){
+  modalBackdrop.style.display='flex';
+  modalTitle.textContent=`PREGLED — ${name} — ${date}`;
+  tasksList.innerHTML='';
+  const tlist=tasksFor[name];
+  const saved=loadData(date,name);
+  currentTaskStates={};
+  if(saved && saved.taskStates) currentTaskStates=saved.taskStates;
+  tlist.forEach((t,idx)=>{
+    const row=document.createElement('div'); row.className='task-row'; row.dataset.index=idx; row.textContent=t;
+    if(currentTaskStates[idx]){row.classList.add('bold'); row.style.color=currentTaskStates[idx];}
+    tasksList.appendChild(row);
+    row.addEventListener('click',()=>{
+      if(!selectedColor){return;}
+      currentTaskStates[idx]=selectedColor;
+      row.classList.add('bold');
+      row.style.color=selectedColor==='green'?'#2e7d32':(selectedColor==='orange'?'#ff8f00':'#c62828');
+    });
+  });
+  notesArea.value=(saved&&saved.notes)?saved.notes:'';
+  setSelectedColor(null);
+  btnDelete.style.display=saved?'inline-block':'none';
+}
+
+function setSelectedColor(c){
+  selectedColor=c;
+  [btnGreen,btnOrange,btnRed].forEach(b=>b.classList.remove('selected'));
+  if(c==='green') btnGreen.classList.add('selected');
+  if(c==='orange') btnOrange.classList.add('selected');
+  if(c==='red') btnRed.classList.add('selected');
+}
+
+[btnGreen,btnOrange,btnRed].forEach(btn=>btn.addEventListener('click',()=>{setSelectedColor(btn.dataset.color);}))
+
+btnSave.addEventListener('click',()=>{
+  const data={taskStates:currentTaskStates, notes:notesArea.value||''};
+  saveData(currentDate,currentName,data);
+  const cell=document.getElementById(`cell-${currentName}`);
+  setCellColor(cell,'#b9f6ca',currentDate);
+  modalBackdrop.style.display='none';
+  setSelectedColor(null); currentTaskStates={};
+});
+
+btnDelete.addEventListener('click',()=>{
+  if(confirm('Res želite izbrisati vse vnose za to osebo na izbran datum?')){
+    deleteData(currentDate,currentName);
+    const cell=document.getElementById(`cell-${currentName}`);
+    setCellColor(cell,'#ffcccb','—');
+    modalBackdrop.style.display='none';
+  }
+});
+
+closeModal.addEventListener('click',()=>{modalBackdrop.style.display='none';});
+modalBackdrop.addEventListener('click',(ev)=>{if(ev.target===modalBackdrop) modalBackdrop.style.display='none';});
+</script>
+</body>
+</html>
